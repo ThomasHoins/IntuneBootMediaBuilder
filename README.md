@@ -18,3 +18,6 @@ https://www.catalog.update.microsoft.com/Search.aspx?q=Surface+Driver+%22Windows
 Optional Components
 
 https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/winpe-add-packages--optional-components-reference?view=windows-11
+
+
+https://www.windowspro.de/wolfgang-sommergut/windows-pe-osdcloud-konfigurieren
