@@ -5,7 +5,7 @@ Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/mas
 
 
 #get missing drivers
-Get-WmiObject Win32_PNPEntity | Where-Object{[string]::IsNullOrEmpty($_.ClassGuid)
+Get-WmiObject Win32_PNPEntity | Where-Object{[string]::IsNullOrEmpty($_.ClassGuid)}
 
 #Install Drivers
 #"X:\Users\Public\Downloads\InstallDrivers.ps1"
