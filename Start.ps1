@@ -5,6 +5,11 @@ Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/mas
 #Download msiexec
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/msiexec.exe" -Outfile "X:\Windows\System32\msiexec.exe"
 
+#Download InstallSurface4Drivers
+Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/InstallSurface4Drivers.ps1" -Outfile "X:\Users\Public\Downloads\InstallSurface4Drivers.ps1"
+#Install Surface Drivers
+"X:\Users\Public\Downloads\InstallSurface4Drivers.ps1"
+
 #get missing drivers
 Get-WmiObject Win32_PNPEntity | Where-Object{[string]::IsNullOrEmpty($_.ClassGuid)}|select Caption, CreationClassName, HardwareID |ft
 
