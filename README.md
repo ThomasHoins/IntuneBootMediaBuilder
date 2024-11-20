@@ -22,5 +22,5 @@ https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/winpe-add
 
 https://www.windowspro.de/wolfgang-sommergut/windows-pe-osdcloud-konfigurieren
 
-$WINPEDriver$
+/$WINPEDriver/$/
 https://learn.microsoft.com/en-us/troubleshoot/windows-client/setup-upgrade-and-drivers/limitations-dollar-sign-winpedriver-dollar-sign
