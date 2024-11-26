@@ -45,6 +45,13 @@ echo "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -Executionpolic
 REM Unmount Image
 Dism /Unmount-Image /MountDir:"C:\Temp\mount\WinPE_admd64" /Commit
 
+setlocal
 
-
-makewinpemedia /ufd  C:\Temp\WinPE_admd64 F:
+for /F "skip=1 tokens=1-10" %A IN ('wmic logicaldisk get description^, deviceid')DO (
+   if "%%A %%B" == "Removable Disk" (
+      echo Found Removable Disk %%C
+   )
+)
+choice /m "Do you really want to delete all content on %%C ?" /c yn
+if not ERRORLEVEL=1 Exit
+makewinpemedia /ufd  C:\Temp\WinPE_admd64 %%C
