@@ -1,7 +1,7 @@
 winget install Microsoft.WindowsADK --version 10.1.22621.1
 winget install Microsoft.ADKPEAddon --version 10.1.22621.1
 
-Cd "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools"
+"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\DandISetEnv.bat"
 
 REM PE Daten vorbereiten
 rd C:\Temp\WinPE_admd64 /S /Q
