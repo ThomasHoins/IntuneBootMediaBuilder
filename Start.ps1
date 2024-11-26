@@ -12,3 +12,4 @@ Get-WmiObject Win32_PNPEntity | Where-Object{[string]::IsNullOrEmpty($_.ClassGui
 
 #Start FIDO
 $URL=& "X:\Users\Public\Downloads\Fido.ps1" -geturl
+Invoke-Webrequest $URL -Outfile "X:\
