@@ -44,8 +44,13 @@ echo "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -Executionpolic
 REM Unmount Image
 Dism /Unmount-Image /MountDir:"C:\Temp\mount\WinPE_admd64" /Commit
 
-setlocal
+choice /m "Create an ISO image or a USB Stick or Cancel?" /c IUC
+If ERRORLEVEL=1 Goto ISO
+If ERRORLEVEL=2 Goto USB
+Exit
 
+:USB
+setlocal
 for /F "skip=1 tokens=1-10" %%A IN ('wmic logicaldisk get description^, deviceid')DO (
    if "%%A %%B" == "Removable Disk" (
       echo Found Removable Disk %%C
@@ -54,3 +59,8 @@ for /F "skip=1 tokens=1-10" %%A IN ('wmic logicaldisk get description^, deviceid
 choice /m "Do you really want to delete all content on %%C ?" /c yn
 if not ERRORLEVEL=1 Exit
 makewinpemedia /ufd  C:\Temp\WinPE_admd64 %%C
+Exit
+
+:ISO
+makewinpemedia /iso C:\Temp\WinPE_admd64 C:\Temp\Install.iso
+Exit
