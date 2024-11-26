@@ -11,4 +11,4 @@ Get-WmiObject Win32_PNPEntity | Where-Object{[string]::IsNullOrEmpty($_.ClassGui
 
 
 #Start FIDO
-& "X:\Users\Public\Downloads\Fido.ps1" -geturl
+$URL=& "X:\Users\Public\Downloads\Fido.ps1" -geturl
