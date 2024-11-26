@@ -46,7 +46,7 @@ Dism /Unmount-Image /MountDir:"C:\Temp\mount\WinPE_admd64" /Commit
 
 setlocal
 
-for /F "skip=1 tokens=1-10" %A IN ('wmic logicaldisk get description^, deviceid')DO (
+for /F "skip=1 tokens=1-10" %%A IN ('wmic logicaldisk get description^, deviceid')DO (
    if "%%A %%B" == "Removable Disk" (
       echo Found Removable Disk %%C
    )
