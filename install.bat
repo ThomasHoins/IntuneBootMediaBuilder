@@ -36,8 +36,7 @@ Dism /Add-Package /Image:"C:\Temp\mount\WinPE_admd64" /PackagePath:"C:\Program F
 REM Add new Start Script
 Del "C:\Temp\mount\WinPE_admd64\Windows\System32\startnet.cmd" /F
 echo wpeinit>> "C:\Temp\mount\WinPE_admd64\Windows\System32\startnet.cmd"
-REM echo ping 127.0.0.1 -n 20>> "C:\Temp\mount\WinPE_admd64\Windows\System32\startnet.cmd"
-echo timeout /t 5 /nobreak >> "C:\Temp\mount\WinPE_admd64\Windows\System32\startnet.cmd"
+echo ping 127.0.0.1 -n 20^>NUL >> "C:\Temp\mount\WinPE_admd64\Windows\System32\startnet.cmd"
 echo "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" invoke-webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1" -Outfile X:\Users\Public\Downloads\Start.ps1>> "C:\Temp\mount\WinPE_admd64\Windows\System32\startnet.cmd"
 echo "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -Executionpolicy Bypass "X:\Users\Public\Downloads\Start.ps1">> "C:\Temp\mount\WinPE_admd64\Windows\System32\startnet.cmd"
 
