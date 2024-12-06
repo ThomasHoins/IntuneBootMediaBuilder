@@ -147,7 +147,7 @@ Switch ($Selection){
        Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\MakeWinPEMedia.cmd" /iso $PEPath "$WorkPath\Install.iso" -Wait
      }
     U {
-        ﻿$usbDrive = (get-disk | where bustype -eq 'usb')
+    	$usbDrive = (get-disk | where bustype -eq 'usb')
         $usbDriveNumber = $usbDrive.Number
         $usbDriveName = $usbDrive.FriendlyName
         # Format the USB drive
