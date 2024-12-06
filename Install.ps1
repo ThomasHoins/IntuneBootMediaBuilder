@@ -1,12 +1,12 @@
 ﻿Param (
-	[string]$PEPath = "",
-	[string]$IsoPath = "",
-	[string]$TempFolder = "C:\Temp",
-	[string]$OutputFolder = "",
-	[string]$StartScriptSource = "https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
-	[string]$DriverFolder = "C:\Temp\Drivers",
-	[string]$ADKPath= "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
-	[string]$ADKVersion = "10.1.22621.1"
+	[string]$PEPath,
+	[string]$IsoPath,
+	[string]$TempFolder="C:\Temp",
+	[string]$OutputFolder,
+	[string]$StartScriptSource="https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
+	[string]$DriverFolder="C:\Temp\Drivers",
+	[string]$ADKPath="C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
+	[string]$ADKVersion="10.1.22621.1"
 	)
 
 <#
@@ -119,13 +119,14 @@ $ComponetsPaths = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environ
 $ComponetsPathsEn = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environment\amd64\WinPE_OCs\en-us\*" -include $Components).FullName
 
 ForEach ($Path in $ComponetsPaths+$ComponetsPathsEn){
-    Add-WindowsPackage -Path $MountPath -PackagePath $Path
+    Add-WindowsPackage -Path $MountPath -PackagePath $Path -IgnoreCheck
 } 
 Get-WindowsPackage -Path $MountPath |ft -AutoSize
 
 # Add new Start Script
 Remove-Item "$MountPath\Windows\System32\startnet.cmd" -Force -ErrorAction SilentlyContinue
 $startnetText = @"
+@ ECHO OFF
 wpeinit
 ping 127.0.0.1 -n 20 >NUL
 "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" invoke-webrequest "$StartScriptSource" -Outfile X:\Users\Public\Downloads\Start.ps1
@@ -154,7 +155,7 @@ Switch ($Selection){
         Clear-Disk -Number $usbDriveNumber -RemoveData 
         New-Partition -DiskNumber $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
         bootsect.exe /nt60 P: /force /mbr 
-        Copy-Item -Path "$PEPath\media" -Destination "P:" -Recurse -PassThru 
+        Copy-Item -Path "$PEPath\media\*" -Destination "P:" -Recurse
       }
     C {Exit}
 }
