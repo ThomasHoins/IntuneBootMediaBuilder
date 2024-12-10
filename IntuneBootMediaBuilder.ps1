@@ -1,14 +1,3 @@
-﻿Param (
-	[string]$PEPath,
-	[string]$IsoPath,
-	[string]$TempFolder="C:\Temp",
-	[string]$OutputFolder,
-	[string]$StartScriptSource="https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
-	[string]$DriverFolder="C:\Temp\Drivers",
-	[string]$ADKPath="C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
-	[string]$ADKVersion="10.1.22621.1"
-	)
-
 <#
 .SYNOPSIS
 Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
@@ -68,10 +57,24 @@ Creates a PE image using a specified ADK version.
 - The script requires administrative privileges.
 - A USB stick with at least 8 GB of storage is required.
 - The ADK version should match the installed Windows version.
+
+	Version: 0.1
+	Author: Thomas Hoins (Datagroup OIT)
+ 	Creation Date:
+	Last Change: 10.12.2024
+ 	Change: Minor changes
 #>
 
-	
-
+﻿Param (
+	[string]$PEPath,
+	[string]$IsoPath,
+	[string]$TempFolder="C:\Temp",
+	[string]$OutputFolder,
+	[string]$StartScriptSource="https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
+	[string]$DriverFolder="C:\Temp\Drivers",
+	[string]$ADKPath="C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
+	[string]$ADKVersion="10.1.22621.1"
+	)	
 
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 if (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))){
@@ -110,6 +113,10 @@ $env:WinPERootNoArch="$ADKPath\Windows Preinstallation Environment"
 $env:OSCDImgRoot="$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
 Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
 Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64,$PEPath -NoNewWindow -Wait -PassThru
+
+#Get FIDO and download Windows 11 installation ISO
+Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
+$W11URL=& $WorkPath\Fido.ps1" -geturl
 
 # prepare directory f. PE
 Remove-Item $MountPath -Recurse -Force -ErrorAction SilentlyContinue
