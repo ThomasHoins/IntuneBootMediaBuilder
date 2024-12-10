@@ -1,4 +1,4 @@
-﻿$usbDrive = (get-disk | where bustype -eq 'usb')
+﻿$usbDrive = (get-disk | Where-Object bustype -eq 'usb')
 $usbDriveNumber = $usbDrive.Number
 $usbDriveName = $usbDrive.FriendlyName
 $confirmation = Read-Host "Are you Sure You Want To Proceed and delete all Data on ""$($usbDriveName)""?"
@@ -9,7 +9,6 @@ if ($confirmation -ne 'y') {Exit}
 Clear-Disk -Number $usbDriveNumber -RemoveData
 New-Partition -DiskNumber $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
 New-Partition -DiskNumber $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" 
-get-disk | where bustype -eq 'usb'|Get-Partition
 bootsect.exe /nt60 P: /force /mbr 
 
 # Mount the ISO file

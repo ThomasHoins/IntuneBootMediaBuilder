@@ -79,6 +79,11 @@ if (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Ad
 	Exit
 	}
 
+	if ((get-disk | Where-Object bustype -eq 'usb'|Get-Partition).Size -lt 7516192768){
+	Write-Host "This USB stick is too small!"
+	Exit
+	}  
+
 If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
 	winget install Microsoft.WindowsADK --version $ADKVersion
 	winget install Microsoft.ADKPEAddon --version $ADKVersion
@@ -148,19 +153,61 @@ $Selection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U,C]"
 
 Switch ($Selection){
     I {
-       Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\MakeWinPEMedia.cmd" /iso $PEPath "$WorkPath\Install.iso" -Wait
+		"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
+		# Check if $IsoPath ends with ".iso"
+		if ($IsoPath -notmatch "\.iso$") {
+			Write-Host "ERROR: destination needs to be an .ISO file." -ForegroundColor Red
+			Cleanup-Path
+			exit 1
+		}
+
+		# Check if the IsoPathination file exists
+		if (-Not (Test-Path $IsoPath)) {
+			$BOOTDATA = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
+		}
+
+		try {
+			Remove-Item -Path $IsoPath -Force -ErrorAction Stop
+			Write-Host "Deleted existing ISO file: $IsoPath"
+		} catch {
+			Write-Host "ERROR: Failed to delete $IsoPath." -ForegroundColor Red
+			Cleanup-Path
+			exit 1
+		}
+
+		$BOOTDATA = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
+
+		# Create the ISO file using the appropriate OSCDImg command
+		Write-Host "Creating $IsoPath..."
+		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$BOOTDATA -u1 -udfver102 `"$PEPath\media`" `"$IsoPath`""
+		Invoke-Expression $oscdimgCmd
+
+		# Check the result of the command
+		if ($LASTEXITCODE -ne 0) {
+			Write-Host "ERROR: Failed to create $IsoPath file." -ForegroundColor Red
+			Cleanup-Path
+			exit 1
+		}
+
      }
     U {
     	$usbDrive = (get-disk | Where-Object bustype -eq 'usb')
         $usbDriveNumber = $usbDrive.Number
         # Format the USB drive
-        Clear-Disk -Number $usbDriveNumber -RemoveData 
-        New-Partition -DiskNumber $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
-        bootsect.exe /nt60 P: /force /mbr 
-        Copy-Item -Path "$PEPath\media\*" -Destination "P:" -Recurse
+        Clear-Disk -Number $usbDriveNumber -RemoveData     
+		New-Partition -DiskNumber $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
+		New-Partition -DiskNumber $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" 
+		bootsect.exe /nt60 P: /force /mbr 
+        Copy-Item -Path "$PEPath\media\*" -IsoPathination "P:" -Recurse
       }
-    C {Exit}
+    C {
+		Cleanup-Path
+		exit 0
+	  }
 }
-# Clean Up
-Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item $MountPath -Recurse -Force -ErrorAction SilentlyContinue
+function Cleanup-Path{
+	# Clean Up
+	Write-Host "Cleaning Up files"
+	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
+	Remove-Item $MountPath -Recurse -Force -ErrorAction SilentlyContinue
+}
