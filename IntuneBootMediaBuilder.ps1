@@ -1,14 +1,3 @@
-﻿Param (
-	[string]$PEPath,
-	[string]$IsoPath,
-	[string]$TempFolder="C:\Temp",
-	[string]$OutputFolder,
-	[string]$StartScriptSource="https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
-	[string]$DriverFolder="C:\Temp\Drivers",
-	[string]$ADKPath="C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
-	[string]$ADKVersion="10.1.22621.1"
-	)
-
 <#
 .SYNOPSIS
 Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
@@ -70,8 +59,16 @@ Creates a PE image using a specified ADK version.
 - The ADK version should match the installed Windows version.
 #>
 
-	
-
+﻿Param (
+	[string]$PEPath,
+	[string]$IsoPath,
+	[string]$TempFolder="C:\Temp",
+	[string]$OutputFolder,
+	[string]$StartScriptSource="https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
+	[string]$DriverFolder="C:\Temp\Drivers",
+	[string]$ADKPath="C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
+	[string]$ADKVersion="10.1.22621.1"
+	)	
 
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 if (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))){
