@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
 
@@ -141,7 +141,7 @@ Get-WindowsPackage -Path $MountPath |Format-Table -AutoSize
 # Add new Start Script
 Remove-Item "$MountPath\Windows\System32\startnet.cmd" -Force -ErrorAction SilentlyContinue
 $startnetText = @"
-@ ECHO OFF
+`@ ECHO OFF
 wpeinit
 ping 127.0.0.1 -n 20 >NUL
 "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" invoke-webrequest "$StartScriptSource" -Outfile X:\Users\Public\Downloads\Start.ps1
