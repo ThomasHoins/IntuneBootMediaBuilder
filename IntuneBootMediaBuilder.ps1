@@ -57,6 +57,12 @@ Creates a PE image using a specified ADK version.
 - The script requires administrative privileges.
 - A USB stick with at least 8 GB of storage is required.
 - The ADK version should match the installed Windows version.
+
+	Version: 0.1
+	Author: Thomas Hoins (Datagroup OIT)
+ 	Creation Date:
+	Last Change: 10.12.2024
+ 	Change: Minor changes
 #>
 
 ﻿Param (
