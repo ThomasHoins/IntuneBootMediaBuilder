@@ -109,6 +109,10 @@ $env:OSCDImgRoot="$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
 Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
 Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64,$PEPath -NoNewWindow -Wait -PassThru
 
+#Get FIDO and download Windows 11 installation ISO
+Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
+$W11URL=& $WorkPath\Fido.ps1" -geturl
+
 # prepare directory f. PE
 Remove-Item $MountPath -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $MountPath
