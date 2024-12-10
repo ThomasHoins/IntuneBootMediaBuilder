@@ -157,7 +157,7 @@ Switch ($Selection){
 		# Check if $IsoPath ends with ".iso"
 		if ($IsoPath -notmatch "\.iso$") {
 			Write-Host "ERROR: destination needs to be an .ISO file." -ForegroundColor Red
-			Cleanup-Path
+			Clear-Path
 			exit 1
 		}
 
@@ -171,7 +171,7 @@ Switch ($Selection){
 			Write-Host "Deleted existing ISO file: $IsoPath"
 		} catch {
 			Write-Host "ERROR: Failed to delete $IsoPath." -ForegroundColor Red
-			Cleanup-Path
+			Clear-Path
 			exit 1
 		}
 
@@ -180,12 +180,12 @@ Switch ($Selection){
 		# Create the ISO file using the appropriate OSCDImg command
 		Write-Host "Creating $IsoPath..."
 		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$BOOTDATA -u1 -udfver102 `"$PEPath\media`" `"$IsoPath`""
-		Invoke-Expression $oscdimgCmd
+		$OSCDResult=Invoke-Expression $oscdimgCmd -PassThru
 
 		# Check the result of the command
-		if ($LASTEXITCODE -ne 0) {
+		if ($OSCDResult -ne 0) {
 			Write-Host "ERROR: Failed to create $IsoPath file." -ForegroundColor Red
-			Cleanup-Path
+			Clear-Path
 			exit 1
 		}
 
@@ -201,11 +201,11 @@ Switch ($Selection){
         Copy-Item -Path "$PEPath\media\*" -IsoPathination "P:" -Recurse
       }
     C {
-		Cleanup-Path
+		Clear-Path
 		exit 0
 	  }
 }
-function Cleanup-Path{
+function Clear-Path{
 	# Clean Up
 	Write-Host "Cleaning Up files"
 	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
