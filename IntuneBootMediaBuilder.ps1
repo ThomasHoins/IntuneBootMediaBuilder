@@ -65,7 +65,7 @@ Creates a PE image using a specified ADK version.
  	Change: Minor changes
 #>
 
-﻿Param (
+Param (
 	[string]$PEPath,
 	[string]$IsoPath,
 	[string]$TempFolder="C:\Temp",
@@ -141,12 +141,13 @@ Get-WindowsPackage -Path $MountPath |Format-Table -AutoSize
 # Add new Start Script
 Remove-Item "$MountPath\Windows\System32\startnet.cmd" -Force -ErrorAction SilentlyContinue
 $startnetText = @"
-`@ ECHO OFF
+@ ECHO OFF
 wpeinit
 ping 127.0.0.1 -n 20 >NUL
 "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" invoke-webrequest "$StartScriptSource" -Outfile X:\Users\Public\Downloads\Start.ps1
 "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -Executionpolicy Bypass "X:\Users\Public\Downloads\Start.ps1"
 "@
+
 Add-Content -Path "$MountPath\Windows\System32\startnet.cmd" -Value $startnetText
 
 # Unmount Image
