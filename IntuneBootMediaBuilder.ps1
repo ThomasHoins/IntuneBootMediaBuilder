@@ -140,12 +140,13 @@ Get-WindowsPackage -Path $MountPath |Format-Table -AutoSize
 
 # Add new Start Script
 Remove-Item "$MountPath\Windows\System32\startnet.cmd" -Force -ErrorAction SilentlyContinue
-$startnetText = @"
-@ ECHO OFF
+
+$startnetText =@"
+`@ ECHO OFF
 wpeinit
 ping 127.0.0.1 -n 20 >NUL
 "X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" invoke-webrequest "$StartScriptSource" -Outfile X:\Users\Public\Downloads\Start.ps1
-"X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -Executionpolicy Bypass "X:\Users\Public\Downloads\Start.ps1"
+"X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -Executionpolicy Bypass X:\Users\Public\Downloads\Start.ps1
 "@
 
 Add-Content -Path "$MountPath\Windows\System32\startnet.cmd" -Value $startnetText
@@ -153,7 +154,6 @@ Add-Content -Path "$MountPath\Windows\System32\startnet.cmd" -Value $startnetTex
 # Unmount Image
 Dismount-WindowsImage -Path $MountPath -Save
 Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
-
 
 #Create Media
 $Selection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U,C]"
@@ -171,7 +171,7 @@ Switch ($Selection){
 
 		# Check if the IsoPathination file exists
 		if (-Not (Test-Path $IsoPath)) {
-			$BOOTDATA = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
+			$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
 		}
 
 		try {
@@ -183,11 +183,11 @@ Switch ($Selection){
 			exit 1
 		}
 
-		$BOOTDATA = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
+		$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
 
 		# Create the ISO file using the appropriate OSCDImg command
 		Write-Host "Creating $IsoPath..."
-		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$BOOTDATA -u1 -udfver102 `"$PEPath\media`" `"$IsoPath`""
+		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$oscdString -u1 -udfver102 `"$PEPath\media`" `"$IsoPath`""
 		$OSCDResult=Invoke-Expression $oscdimgCmd -PassThru
 
 		# Check the result of the command
@@ -196,7 +196,6 @@ Switch ($Selection){
 			Clear-Path
 			exit 1
 		}
-
      }
     U {
     	$usbDrive = (get-disk | Where-Object bustype -eq 'usb')
@@ -218,4 +217,5 @@ function Clear-Path{
 	Write-Host "Cleaning Up files"
 	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
 	Remove-Item $MountPath -Recurse -Force -ErrorAction SilentlyContinue
+	}
 }
