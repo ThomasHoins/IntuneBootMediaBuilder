@@ -116,7 +116,7 @@ Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd
 
 #Get FIDO and download Windows 11 installation ISO
 Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
-$W11URL=& $WorkPath\Fido.ps1" -geturl
+$W11URL=& "$WorkPath\Fido.ps1" -geturl
 
 # prepare directory f. PE
 Remove-Item $MountPath -Recurse -Force -ErrorAction SilentlyContinue
@@ -217,5 +217,5 @@ function Clear-Path{
 	Write-Host "Cleaning Up files"
 	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
 	Remove-Item $MountPath -Recurse -Force -ErrorAction SilentlyContinue
-	}
+	
 }
