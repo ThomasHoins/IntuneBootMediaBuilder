@@ -16,11 +16,11 @@ $SearchResult = $Searcher.Search($Criteria)
 $Updates = $SearchResult.Updates
 	
 #Show available Drivers...
-$Updates | select Title, DriverModel, DriverVerDate, Driverclass, DriverManufacturer | fl
+$Updates | Select-Object Title, DriverModel, DriverVerDate, Driverclass, DriverManufacturer | Format-List
 
 #Download the Drivers
 $UpdatesToDownload = New-Object -Com Microsoft.Update.UpdateColl
-$Updates | % { $UpdatesToDownload.Add($_) | out-null }
+$Updates | ForEach-Object { $UpdatesToDownload.Add($_) | out-null }
 Write-Host('Downloading Drivers...')  -Fore Green
 $UpdateSession = New-Object -Com Microsoft.Update.Session
 $Downloader = $UpdateSession.CreateUpdateDownloader()
@@ -28,7 +28,7 @@ $Downloader.Updates = $UpdatesToDownload
 $Downloader.Download()
 
 $UpdatesToInstall = New-Object -Com Microsoft.Update.UpdateColl
-$updates | % { if($_.IsDownloaded) { $UpdatesToInstall.Add($_) | out-null } }
+$updates | ForEach-Object { if($_.IsDownloaded) { $UpdatesToInstall.Add($_) | out-null } }
 
 #Install the Drivers
 Write-Host('Installing Drivers...')  -Fore Green
