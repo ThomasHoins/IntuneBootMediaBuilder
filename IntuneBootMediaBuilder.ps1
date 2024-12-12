@@ -150,6 +150,10 @@ $env:OSCDImgRoot="$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
 Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
 Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64,$PEPath -NoNewWindow -Wait -PassThru
 
+###########################################################
+#	Downloading Installation Media
+###########################################################
+
 #Get FIDO and download Windows 11 installation ISO
 If (!([string]::IsNullOrEmpty($DownloadISO) )){
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
@@ -162,7 +166,13 @@ If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")){
 	}
 
 If (Test-Path -PathType Leaf $WorkPath\Installation.iso){
-	$InstDriveLetter = (Mount-DiskImage -ImagePath $WorkPath\Installation.iso | Get-Volume).DriveLetter
+	Write-Host "Copying installation iata to Temp folder"
+	$InstVol = (Mount-DiskImage -ImagePath $WorkPath\Installation.iso | Get-Volume).DriveLetter
+	$InstDriveLetter = "$($InstVol.DriveLetter):"
+	$InstMediaPath = "$WorkPath\$($InstVol.FileSystemLabel)"
+	New-Item -ItemType Directory -Path $InstMediaPath
+	Start-Process "$($env:windir)\System32\Robocopy.exe" "/s /z ""$InstDriveLetter"" ""$InstMediaPath""" -Wait 
+	Dismount-DiskImage -ImagePath $WorkPath\Installation.iso
 	}
 Else{
 	Write-Host "$WorkPath\Installation.iso  not found! Exiting"
@@ -182,8 +192,7 @@ New-Item -ItemType Directory -Path $BootPath
 
 # mount Boot Image
 If ($UseFido){
-	$BootWimTemp = "$WorkPath\Boot.wim"
-	copy-item "$($InstDriveLetter):\sources\boot.wim" $BootWimTemp
+	$BootWimTemp = "$InstMediaPath\sources\Boot.wim"
 	Set-ItemProperty -Path $BootWimTemp -Name IsReadOnly -Value $false
 	Mount-WindowsImage -ImagePath $BootWimTemp -Index:1 -Path $BootPath
 	}
@@ -233,8 +242,7 @@ Remove-Item $InstWimPath -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $InstWimPath
 
 # mount Install Image
-$InstWimTemp = "$WorkPath\Install.wim"
-copy-item "$($InstDriveLetter):\sources\Install.wim" $InstWimTemp
+$InstWimTemp = "$InstMediaPath\sources\Install.wim"
 Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 Mount-WindowsImage -ImagePath $InstWimTemp -Index:1 -Path $InstWimPath
 
@@ -246,10 +254,10 @@ $ProfileJSON | Set-Content -Encoding Ascii "$InstWimPath\Windows\Provisioning\Au
 # Unmount Install Image
 Dismount-WindowsImage -Path $InstWimPath -Save
 Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
-copy-item $InstWimTemp I:
+
 
 ###########################################################
-#	Creating Boot Media
+#	Creating Installation Media
 ###########################################################
 
 #Create Media
@@ -267,7 +275,7 @@ Switch ($Selection){
 		# Create the ISO file using the appropriate OSCDImg command
 		Write-Host "Creating $IsoFileName..."
 		$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
-		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$oscdString -u1 -udfver102 `"$PEPath\media`" `"$IsoFileName`""
+		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$oscdString -u1 -udfver102 `"$InstMediaPath`" `"$IsoFileName`""
 		$OSCDResult=Invoke-Expression $oscdimgCmd -PassThru
 
 		# Check the result of the command
@@ -279,7 +287,7 @@ Switch ($Selection){
 		
      }
     U {
-        $usbDrive = (get-disk | Where-Object bustype -eq 'usb')
+        $usbDrive = (Get-Disk | Where-Object bustype -eq 'usb')
         $usbDriveNumber = $usbDrive.Number
         $AbortYN = Read-Host "All Data on $usbDrive.Model will be deleted ? [Y,N]"
         Switch ($AbortYN){
@@ -288,9 +296,12 @@ Switch ($Selection){
             Get-Partition $usbDriveNumber | Remove-Partition
 		    New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
 		    New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" 
-		    bootsect.exe /nt60 P: /force /mbr 
+		    Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr"
             # Copy BootData to P:
-            Copy-Item -Path "$PEPath\media\*" -Destination "P:" -Recurse
+            Start-Process "$($env:windir)\System32\Robocopy.exe"  "/s /z ""$InstMediaPath"" P: /max:3800000000" -Wait
+			# Copy InstallData to I:
+			New-Item -ItemType Directory -Path "I:\Source"
+			copy-item $InstWimTemp "I:\Source"
             }
             N{
             Clear-Path
