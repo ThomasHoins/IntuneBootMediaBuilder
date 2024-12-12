@@ -1,11 +1,32 @@
-﻿#Requires -Modules Microsoft.Graph.Authentication
+﻿
 
 <#
 .SYNOPSIS
-Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
+	Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
 
 .DESCRIPTION
-This script creates a bootable Windows PE image by downloading, installing, and configuring the Windows ADK. It integrates drivers and components and adds a custom startup script that runs when the PE boots. The final image can be saved as an ISO file or written directly to a USB stick. It is designed specifically for Intune Autopilot deployments.
+	This script creates a bootable Windows PE image by downloading, installing, and configuring the Windows ADK. 
+	It integrates drivers and components and adds a custom startup script that runs when the PE boots. 
+	The final image can be saved as an ISO file or written directly to a USB stick. It is designed specifically for Intune Autopilot deployments.
+	You can create a "binschonda.txt" file in one of your Working Directories (The ones with DATE-RND name)
+
+	- The script requires administrative privileges.
+	- A USB stick with at least 8 GB of storage is required.
+	- The ADK version should match the installed Windows version.
+
+.NOTES
+
+	Version:		0.1
+	Author: 		Thomas Hoins 
+					Datagroup OIT
+ 	initial Date:	10.12.2024
+ 	Changes: 		12.12. 2024	Minor changes
+
+.LINK
+	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
+
+.COMPONENT
+	Requires Modules Microsoft.Graph.Authentication
 
 .PARAMETER PEPath
 Specifies the path where the PE files will be cached.
@@ -63,20 +84,9 @@ PS> .\IntuneBootMediaBuilder.ps1 -PEPath "C:\WinPE" -DriverFolder "C:\Drivers" -
 
 Creates a PE image using a specified ADK version.
 
-.LINK
-[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
-
-.NOTES
-- The script requires administrative privileges.
-- A USB stick with at least 8 GB of storage is required.
-- The ADK version should match the installed Windows version.
-
-	Version: 0.1
-	Author: Thomas Hoins (Datagroup OIT)
- 	Creation Date:
-	Last Change: 10.12.2024
- 	Change: Minor changes
 #>
+
+#Requires -Modules Microsoft.Graph.Authentication
 
 Param (
 	[string]$PEPath,
@@ -98,12 +108,13 @@ if (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Ad
 	Exit
 	}
 
-	if ((get-disk | Where-Object bustype -eq 'usb'|Get-Partition).Size -lt 7516192768){
+if ((get-disk | Where-Object bustype -eq 'usb'|Get-Partition).Size -lt 7516192768){
 	Write-Host "This USB stick is too small!"
 	Exit
 	}  
 
 If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
+	Write-Host "No ADK has been found, installing it!"
 	winget install Microsoft.WindowsADK --version $ADKVersion
 	winget install Microsoft.ADKPEAddon --version $ADKVersion
 	}
@@ -122,8 +133,12 @@ If (!(Test-Path -Path $WorkPath)) {
 	New-Item -ItemType Directory -Path $WorkPath
 	}	
 
-
-$PEPath = "$WorkPath\WinPE_admd64"
+If (!([string]::IsNullOrEmpty($PEPath) )){
+	$PEPath = "$WorkPath\WinPE_admd64"	
+	}
+If (!([string]::IsNullOrEmpty($IsoPath) )){
+	$IsoPath = $WorkPath	
+	}
 $BootPath = "$WorkPath\mount\Boot"
 $InstWimPath = "$WorkPath\mount\InstWim"
 
@@ -139,31 +154,47 @@ Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd
 If (!([string]::IsNullOrEmpty($DownloadISO) )){
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
 	$DownloadISO=& "$WorkPath\Fido.ps1" -geturl
+	$UseFido=$true
 	}
 If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")){
+	Write-Host "Downloading installation ISO please be patient!"
 	Start-BitsTransfer -Source $DownloadISO -Destination "$WorkPath\Installation.iso"
 	}
 
 If (Test-Path -PathType Leaf $WorkPath\Installation.iso){
 	$InstDriveLetter = (Mount-DiskImage -ImagePath $WorkPath\Installation.iso | Get-Volume).DriveLetter
 	}
+Else{
+	Write-Host "$WorkPath\Installation.iso  not found! Exiting"
+	Clear-Path
+	exit 1
+	}
 
+###########################################################
+#	Prepareing Boot Image
+###########################################################
+
+Write-Host "Preparing Boot Image"
 
 # prepare directory f. PE
 Remove-Item $BootPath -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $BootPath
 
-# prepare directory f. Install.wim
-Remove-Item $InstWimPath -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $InstWimPath
-
 # mount Boot Image
-Mount-WindowsImage -ImagePath "$PEPath\media\sources\boot.wim" -Index:1 -Path $BootPath
+If ($UseFido){
+	$BootWimTemp = "$WorkPath\Boot.wim"
+	copy-item "$($InstDriveLetter):\sources\boot.wim" $BootWimTemp
+	Set-ItemProperty -Path $BootWimTemp -Name IsReadOnly -Value $false
+	Mount-WindowsImage -ImagePath $BootWimTemp -Index:1 -Path $BootPath
+	}
+Else{
+	Mount-WindowsImage -ImagePath "$PEPath\media\sources\boot.wim" -Index:1 -Path $BootPath
+	}
 
-# Inject Drivers
+# Inject Drivers to BootImage
 Add-WindowsDriver -Path $BootPath -Driver $DriverFolder -Recurse
 
-# Add Components
+# Add Components to BootImage
 $Components= @("*WinPE-WMI*","*WinPE-NetFX*","*WinPE-Scripting*","*WinPE-PowerShell*","*WinPE-StorageWM*","*WinPE-DismCmdlet*","*WinPE-Dot3Svc*")
 $ComponetsPaths = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environment\amd64\WinPE_OCs\*" -include $Components).FullName
 $ComponetsPathsEn = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environment\amd64\WinPE_OCs\en-us\*" -include $Components).FullName
@@ -173,7 +204,7 @@ ForEach ($Path in $ComponetsPaths+$ComponetsPathsEn){
 	} 
 Get-WindowsPackage -Path $BootPath |Format-Table -AutoSize
 
-# Add new Start Script
+# Add new Start Script to BootImage
 Remove-Item "$BootPath\Windows\System32\startnet.cmd" -Force -ErrorAction SilentlyContinue
 
 $startnetText =@"
@@ -191,11 +222,23 @@ Add-Content -Path "$BootPath\Windows\System32\startnet.cmd" -Value $startnetText
 Dismount-WindowsImage -Path $BootPath -Save
 Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
 
+###########################################################
+#	Prepareing Install Image
+###########################################################
+
+Write-Host "Preparing Install Image"
+
+# prepare directory f. Install.wim
+Remove-Item $InstWimPath -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $InstWimPath
+
 # mount Install Image
 $InstWimTemp = "$WorkPath\Install.wim"
 copy-item "$($InstDriveLetter):\sources\Install.wim" $InstWimTemp
 Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
-Mount-WindowsImage -ImagePath $InstWimTemp -Index:1 -Path $InstWimPath 
+Mount-WindowsImage -ImagePath $InstWimTemp -Index:1 -Path $InstWimPath
+
+# inject Intune Profile
 Connect-MgGraph -TenantId $TenantID -NoWelcome
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 $ProfileJSON | Set-Content -Encoding Ascii "$InstWimPath\Windows\Provisioning\Autopilot\AutopilotConfigurationFile.json"
@@ -205,6 +248,9 @@ Dismount-WindowsImage -Path $InstWimPath -Save
 Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
 copy-item $InstWimTemp I:
 
+###########################################################
+#	Creating Boot Media
+###########################################################
 
 #Create Media
 $Selection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U,C]"
@@ -212,33 +258,16 @@ $Selection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U,C]"
 
 Switch ($Selection){
     I {
-		"C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
-		# Check if $IsoPath ends with ".iso"
-		if ($IsoPath -notmatch "\.iso$") {
-			Write-Host "ERROR: destination needs to be an .ISO file." -ForegroundColor Red
-			Clear-Path
-			exit 1
+		# Check if the Destination file exists
+		if ((Test-Path $IsoPath)) {
+			New-Item -ItemType Directory -Path $IsoPath
 		}
-
-		# Check if the IsoPathination file exists
-		if (-Not (Test-Path $IsoPath)) {
-			$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
-		}
-
-		try {
-			Remove-Item -Path $IsoPath -Force -ErrorAction Stop
-			Write-Host "Deleted existing ISO file: $IsoPath"
-		} catch {
-			Write-Host "ERROR: Failed to delete $IsoPath." -ForegroundColor Red
-			Clear-Path
-			exit 1
-		}
-
-		$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
-
+		
+		$IsoFileName="$IsoPath\IntuneBootMedia.iso"
 		# Create the ISO file using the appropriate OSCDImg command
-		Write-Host "Creating $IsoPath..."
-		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$oscdString -u1 -udfver102 `"$PEPath\media`" `"$IsoPath`""
+		Write-Host "Creating $IsoFileName..."
+		$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
+		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$oscdString -u1 -udfver102 `"$PEPath\media`" `"$IsoFileName`""
 		$OSCDResult=Invoke-Expression $oscdimgCmd -PassThru
 
 		# Check the result of the command
@@ -247,6 +276,7 @@ Switch ($Selection){
 			Clear-Path
 			exit 1
 		}
+		
      }
     U {
         $usbDrive = (get-disk | Where-Object bustype -eq 'usb')
