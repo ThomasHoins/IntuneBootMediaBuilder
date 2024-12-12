@@ -29,7 +29,7 @@ $usbDriveNumber = $usbDrive.Number
 $usbDriveName = $usbDrive.FriendlyName
 
 # Confirm with the user
-if (-not (Confirm-Action "Are you sure you want to format and delete all data on \"$usbDriveName\"?")) {
+if (-not (Confirm-Action "Are you sure you want to format and delete all data on ""$($usbDriveName)""?")) {
     Exit
 }
 
@@ -109,8 +109,8 @@ try {
 Write-Host "Cleaning up and unmounting drives..." -ForegroundColor Cyan
 try {
     # Use PowerShell cmdlets to remove drive letters
-    Remove-PartitionAccessPath -AccessPath "P:\" -ErrorAction SilentlyContinue
-    Remove-PartitionAccessPath -AccessPath "I:\" -ErrorAction SilentlyContinue
+    Get-Partition -DriveLetter P |Remove-PartitionAccessPath -AccessPath "P:\" -ErrorAction SilentlyContinue
+    Get-Partition -DriveLetter I |Remove-PartitionAccessPath -AccessPath "I:\" -ErrorAction SilentlyContinue
     Dismount-DiskImage -ImagePath $isoPath -ErrorAction Stop
 } catch {
     Write-Host "Error during cleanup: $_" -ForegroundColor Red
