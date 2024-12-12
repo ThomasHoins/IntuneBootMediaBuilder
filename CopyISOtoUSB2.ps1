@@ -77,7 +77,7 @@ function Install-ADK {
 }
 
 # Function: Create ISO image
-function Create-Iso {
+function New-Iso {
     param (
         [string]$IsoPath,
         [string]$PEPath,
@@ -101,7 +101,7 @@ function Create-Iso {
 }
 
 # Function: Format USB and copy PE files
-function Create-USB {
+function Set-USB {
     param (
         [string]$PEPath
     )
@@ -123,8 +123,8 @@ Install-ADK -ADKPath $ADKPath -ADKVersion $ADKVersion
 
 $Selection = Read-Host "Select output type: [I]SO, [U]SB, [C]ancel"
 switch ($Selection.ToUpper()) {
-    "I" { Create-Iso -IsoPath $IsoPath -PEPath $PEPath -ADKPath $ADKPath }
-    "U" { Create-USB -PEPath $PEPath }
+    "I" { New-Iso -IsoPath $IsoPath -PEPath $PEPath -ADKPath $ADKPath }
+    "U" { Set-USB -PEPath $PEPath }
     "C" { Write-Output "Operation canceled."; Exit 0 }
     default { Write-Error "Invalid selection. Exiting."; Exit 1 }
 }
