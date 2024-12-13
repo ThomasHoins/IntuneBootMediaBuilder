@@ -91,7 +91,7 @@ Creates a PE image using a specified ADK version.
 Param (
 	[string]$PEPath,
 	[string]$IsoPath,
-	[string]$DownloadISO="https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=c72f70cf-7301-4521-b6e0-cddc763307ad&P1=1733998547&P2=601&P3=2&P4=OWu2bEtKuDNqmD1JeMY8Hm7STgcabVRJRBYg4TgYR1wsowNOTfZdgq5OviDXnzYdT6oDIcvtUxubquHq27LzTwXO37MB5wTIXVAcRY5KKvLM2zt58Eo8TNR1SCfw1j4zvxZc1vRTDtB%2bNVvfZK4QTCvFIHNwqwOOyw8YNJuzcIJZh14QQZGlxFtg70fzqtzJycIwgjQwvle3ZYMaC2remsn%2bWaH3mA4ZxQNcsf6RDE4imRTt3l3xojIp2T6sVln7v7Cra3NwnrpaOmEyBmGACDNR%2bpgcp7DYvymF4GElE1VjntIkmqKpBZC5mPULeTJJkoBTeN0Tjtmb2UlxmKKYZg%3d%3d",
+	[string]$DownloadISO="https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=23e54b6a-020f-4f2b-ae70-e1e52676ea1c&P1=1734172137&P2=601&P3=2&P4=QToZDn6aVi4krTph%2fkSVvhS9RPAacWYuSb54K3mwuNrDZ6Vkh%2bil6BjCeoqf9bvAXns96krwYEbFjFiqocRaYNiGewxgN0YWFUKIttmo%2fVNNRKoXBlnlIy0omYT1ljweXzYUU17cJXEq3vtVHKT45mxVqbgainFJEDr%2brpEjK32FsfBIPG9FTvrl8dESy%2bhZ1KFyw7N0FXCXt1CaLipsfvkV49fr4a0EYnnVsIzDPIB1Cxpv9rSeOVtYchsPpWufYuq88cGH0tuyJWrK5IrHvDGbjnwBuQtX9WQ7dYPwdIwU7WYoH4SYh3%2fGnDbMfnGQMY4j7ap0qpE%2bIT4cuMriBA%3d%3d",
 	[string]$TempFolder="C:\Temp",
 	[string]$OutputFolder,
 	[string]$StartScriptSource="https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
@@ -102,226 +102,21 @@ Param (
 	[string]$ProfileID="41b669f0-86d4-4363-b666-5046469d0611"
 	)	
 
-$userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
-if (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))){
-	Write-Host "Admin permissions required!"
-	Exit
-	}
-
-if ((get-disk | Where-Object bustype -eq 'usb'|Get-Partition).Size -lt 7516192768){
-	Write-Host "This USB stick is too small!"
-	Exit
-	}  
-
-If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
-	Write-Host "No ADK has been found, installing it!"
-	winget install Microsoft.WindowsADK --version $ADKVersion
-	winget install Microsoft.ADKPEAddon --version $ADKVersion
-	}
-
-
-#create Path environment create new workdir if "binschonda.txt" does not exist
-If (!(Test-Path -Path $TempFolder)) {
-	New-Item -ItemType Directory -Path $TempFolder
-	}
-$WorkPath = (Get-ChildItem -Path $TempFolder -Include binschonda.txt -File -Recurse -ErrorAction SilentlyContinue).DirectoryName
-If (!(Test-Path -Path $WorkPath)) {
-	$random = (Get-Random -Maximum 1000 ).ToString('0000')
-	$date =(get-date -format yyyyMMddmmss).ToString()
-	$TempPath = "$date-$random"
-	$WorkPath = "$TempFolder\$TempPath"
-	New-Item -ItemType Directory -Path $WorkPath
-	}	
-
-If (!([string]::IsNullOrEmpty($PEPath) )){
-	$PEPath = "$WorkPath\WinPE_admd64"	
-	}
-If (!([string]::IsNullOrEmpty($IsoPath) )){
-	$IsoPath = $WorkPath	
-	}
-$BootPath = "$WorkPath\mount\Boot"
-$InstWimPath = "$WorkPath\mount\InstWim"
-
-# prepare PE data
-$env:DandIRoot="$ADKPath\Deployment Tools"
-$env:WinPERoot="$ADKPath\Windows Preinstallation Environment"
-$env:WinPERootNoArch="$ADKPath\Windows Preinstallation Environment"
-$env:OSCDImgRoot="$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
-Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
-Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64,$PEPath -NoNewWindow -Wait -PassThru
-
 ###########################################################
-#	Downloading Installation Media
+#	Functions
 ###########################################################
 
-#Get FIDO and download Windows 11 installation ISO
-If (!([string]::IsNullOrEmpty($DownloadISO) )){
-	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
-	$DownloadISO=& "$WorkPath\Fido.ps1" -geturl
-	$UseFido=$true
-	}
-If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")){
-	Write-Host "Downloading installation ISO please be patient!"
-	Start-BitsTransfer -Source $DownloadISO -Destination "$WorkPath\Installation.iso"
-	}
-
-If (Test-Path -PathType Leaf $WorkPath\Installation.iso){
-	Write-Host "Copying installation iata to Temp folder"
-	$InstVol = (Mount-DiskImage -ImagePath $WorkPath\Installation.iso | Get-Volume).DriveLetter
-	$InstDriveLetter = "$($InstVol.DriveLetter):"
-	$InstMediaPath = "$WorkPath\$($InstVol.FileSystemLabel)"
-	New-Item -ItemType Directory -Path $InstMediaPath
-	Start-Process "$($env:windir)\System32\Robocopy.exe" "/s /z ""$InstDriveLetter"" ""$InstMediaPath""" -Wait 
-	Dismount-DiskImage -ImagePath $WorkPath\Installation.iso
-	}
-Else{
-	Write-Host "$WorkPath\Installation.iso  not found! Exiting"
-	Clear-Path
-	exit 1
-	}
-
-###########################################################
-#	Prepareing Boot Image
-###########################################################
-
-Write-Host "Preparing Boot Image"
-
-# prepare directory f. PE
-Remove-Item $BootPath -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $BootPath
-
-# mount Boot Image
-If ($UseFido){
-	$BootWimTemp = "$InstMediaPath\sources\Boot.wim"
-	Set-ItemProperty -Path $BootWimTemp -Name IsReadOnly -Value $false
-	Mount-WindowsImage -ImagePath $BootWimTemp -Index:1 -Path $BootPath
-	}
-Else{
-	Mount-WindowsImage -ImagePath "$PEPath\media\sources\boot.wim" -Index:1 -Path $BootPath
-	}
-
-# Inject Drivers to BootImage
-Add-WindowsDriver -Path $BootPath -Driver $DriverFolder -Recurse
-
-# Add Components to BootImage
-$Components= @("*WinPE-WMI*","*WinPE-NetFX*","*WinPE-Scripting*","*WinPE-PowerShell*","*WinPE-StorageWM*","*WinPE-DismCmdlet*","*WinPE-Dot3Svc*")
-$ComponetsPaths = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environment\amd64\WinPE_OCs\*" -include $Components).FullName
-$ComponetsPathsEn = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environment\amd64\WinPE_OCs\en-us\*" -include $Components).FullName
-
-ForEach ($Path in $ComponetsPaths+$ComponetsPathsEn){
-    Add-WindowsPackage -Path $MountPath -PackagePath $Path -IgnoreCheck
-	} 
-Get-WindowsPackage -Path $BootPath |Format-Table -AutoSize
-
-# Add new Start Script to BootImage
-Remove-Item "$BootPath\Windows\System32\startnet.cmd" -Force -ErrorAction SilentlyContinue
-
-$startnetText =@"
-`@ ECHO OFF
-wpeinit
-powercfg /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 
-ping 127.0.0.1 -n 20 >NUL
-"X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" invoke-webrequest "$StartScriptSource" -Outfile X:\Users\Public\Downloads\Start.ps1
-"X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -Executionpolicy Bypass X:\Users\Public\Downloads\Start.ps1
-"@
-
-Add-Content -Path "$BootPath\Windows\System32\startnet.cmd" -Value $startnetText
-
-# Unmount Boot Image
-Dismount-WindowsImage -Path $BootPath -Save
-Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
-
-###########################################################
-#	Prepareing Install Image
-###########################################################
-
-Write-Host "Preparing Install Image"
-
-# prepare directory f. Install.wim
-Remove-Item $InstWimPath -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $InstWimPath
-
-# mount Install Image
-$InstWimTemp = "$InstMediaPath\sources\Install.wim"
-Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
-Mount-WindowsImage -ImagePath $InstWimTemp -Index:1 -Path $InstWimPath
-
-# inject Intune Profile
-Connect-MgGraph -TenantId $TenantID -NoWelcome
-$ProfileJSON = Get-IntuneJson -id $ProfileID
-$ProfileJSON | Set-Content -Encoding Ascii "$InstWimPath\Windows\Provisioning\Autopilot\AutopilotConfigurationFile.json"
-
-# Unmount Install Image
-Dismount-WindowsImage -Path $InstWimPath -Save
-Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
-
-
-###########################################################
-#	Creating Installation Media
-###########################################################
-
-#Create Media
-$Selection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U,C]"
-
-
-Switch ($Selection){
-    I {
-		# Check if the Destination file exists
-		if ((Test-Path $IsoPath)) {
-			New-Item -ItemType Directory -Path $IsoPath
-		}
-		
-		$IsoFileName="$IsoPath\IntuneBootMedia.iso"
-		# Create the ISO file using the appropriate OSCDImg command
-		Write-Host "Creating $IsoFileName..."
-		$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
-		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$oscdString -u1 -udfver102 `"$InstMediaPath`" `"$IsoFileName`""
-		$OSCDResult=Invoke-Expression $oscdimgCmd -PassThru
-
-		# Check the result of the command
-		if ($OSCDResult -ne 0) {
-			Write-Host "ERROR: Failed to create $IsoPath file." -ForegroundColor Red
-			Clear-Path
-			exit 1
-		}
-		
-     }
-    U {
-        $usbDrive = (Get-Disk | Where-Object bustype -eq 'usb')
-        $usbDriveNumber = $usbDrive.Number
-        $AbortYN = Read-Host "All Data on $usbDrive.Model will be deleted ? [Y,N]"
-        Switch ($AbortYN){
-            Y{
-            # Format the USB drive
-            Get-Partition $usbDriveNumber | Remove-Partition
-		    New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
-		    New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" 
-		    Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr"
-            # Copy BootData to P:
-            Start-Process "$($env:windir)\System32\Robocopy.exe"  "/s /z ""$InstMediaPath"" P: /max:3800000000" -Wait
-			# Copy InstallData to I:
-			New-Item -ItemType Directory -Path "I:\Source"
-			copy-item $InstWimTemp "I:\Source"
-            }
-            N{
-            Clear-Path
-            exit 1
-            }
-		}
-
-      }
-    C {
-		Clear-Path
-		exit 0
-	  }
-}
 function Clear-Path{
 	# Clean Up
-	Write-Host "Cleaning Up files"
+	Write-Host "Cleaning up files"
+    Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
+    Disconnect-MgGraph
 	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
 	Remove-Item $BootPath -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue
 	
 }
+
 function Get-IntuneJson() {
 	[cmdletbinding()]
 	<#
@@ -437,4 +232,231 @@ function Get-IntuneJson() {
 	# Return the JSON
 	ConvertTo-JSON $json
 	}
-	
+
+###########################################################
+#	Main
+###########################################################
+
+$userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
+if (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))){
+	Write-Host "Admin permissions required!"
+	Exit
+	}
+
+if ((get-disk | Where-Object bustype -eq 'usb').Size -lt 7516192768){
+	Write-Host "This USB stick is too small!"
+	Exit
+	}  
+
+If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
+	Write-Host "No ADK has been found, installing it!"
+	winget install Microsoft.WindowsADK --version $ADKVersion
+	winget install Microsoft.ADKPEAddon --version $ADKVersion
+	}
+
+
+#create Path environment create new workdir if "binschonda.txt" does not exist
+If (!(Test-Path -Path $TempFolder)) {
+	New-Item -ItemType Directory -Path $TempFolder
+	}
+$WorkPath = (Get-ChildItem -Path $TempFolder -Include binschonda.txt -File -Recurse -ErrorAction SilentlyContinue).DirectoryName
+If (([string]::IsNullOrEmpty($WorkPath))) {
+	$random = (Get-Random -Maximum 1000 ).ToString('0000')
+	$date =(get-date -format yyyyMMddmmss).ToString()
+	$TempPath = "$date-$random"
+	$WorkPath = "$TempFolder\$TempPath"
+	New-Item -ItemType Directory -Path $WorkPath
+	}	
+
+If (([string]::IsNullOrEmpty($PEPath) )){
+	$PEPath = "$WorkPath\WinPE_admd64"	
+	}
+If (([string]::IsNullOrEmpty($IsoPath) )){
+	$IsoPath = $WorkPath	
+	}
+$BootPath = "$WorkPath\mount\Boot"
+$InstWimPath = "$WorkPath\mount\InstWim"
+
+# prepare PE data
+$env:DandIRoot="$ADKPath\Deployment Tools"
+$env:WinPERoot="$ADKPath\Windows Preinstallation Environment"
+$env:WinPERootNoArch="$ADKPath\Windows Preinstallation Environment"
+$env:OSCDImgRoot="$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
+Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
+Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64,$PEPath -NoNewWindow -Wait -PassThru
+
+# aquiere Json Data from tenant
+Connect-MgGraph -TenantId $TenantID -NoWelcome
+$ProfileJSON = Get-IntuneJson -id $ProfileID
+
+###########################################################
+#	Downloading Installation Media
+###########################################################
+
+#Get FIDO and download Windows 11 installation ISO
+If (([string]::IsNullOrEmpty($DownloadISO) )){
+	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
+	$DownloadISO=& "$WorkPath\Fido.ps1" -geturl
+	$UseFido=$true
+    [WinAPI.Utils]::ShowWindow(([System.Diagnostics.Process]::GetCurrentProcess() | Get-Process).MainWindowHandle, 1) | Out-Null
+	}
+If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")){
+	Write-Host "Downloading installation ISO please be patient!"
+	#Start-BitsTransfer -Source $DownloadISO -Destination "$WorkPath\Installation.iso"
+    Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
+	}
+
+If (Test-Path -PathType Leaf $WorkPath\Installation.iso){
+	Write-Host "Copying installation iata to Temp folder"
+	$InstVol = Mount-DiskImage -ImagePath $WorkPath\Installation.iso | Get-Volume
+	$InstDriveLetter = "$($InstVol.DriveLetter):"
+	$InstMediaPath = "$WorkPath\$($InstVol.FileSystemLabel)"
+    Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue
+	New-Item -ItemType Directory -Path $InstMediaPath
+	Start-Process "$($env:windir)\System32\Robocopy.exe" "/s /z ""$InstDriveLetter"" ""$InstMediaPath""" -Wait 
+	Dismount-DiskImage -ImagePath $WorkPath\Installation.iso
+	}
+Else{
+	Write-Host "$WorkPath\Installation.iso  not found! Exiting"
+	Clear-Path
+	exit 1
+	}
+
+###########################################################
+#	Prepareing Boot Image
+###########################################################
+
+Write-Host "Preparing Boot Image"
+
+# prepare directory f. PE
+Remove-Item $BootPath -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $BootPath
+
+# mount Boot Image
+If ($UseFido){
+	$BootWimTemp = "$InstMediaPath\sources\Boot.wim"
+	Set-ItemProperty -Path $BootWimTemp -Name IsReadOnly -Value $false
+	Mount-WindowsImage -ImagePath $BootWimTemp -Index:1 -Path $BootPath
+	}
+Else{
+	Mount-WindowsImage -ImagePath "$PEPath\media\sources\boot.wim" -Index:1 -Path $BootPath
+	}
+
+# Inject Drivers to BootImage
+Write-Host "Adding drivers to Boot Image"
+Add-WindowsDriver -Path $BootPath -Driver $DriverFolder -Recurse
+
+# Add Components to BootImage
+Write-Host "Adding components to Boot Image"
+$Components= @("*WinPE-WMI*","*WinPE-NetFX*","*WinPE-Scripting*","*WinPE-PowerShell*","*WinPE-StorageWM*","*WinPE-DismCmdlet*","*WinPE-Dot3Svc*")
+$ComponetsPaths = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environment\amd64\WinPE_OCs\*" -include $Components).FullName
+$ComponetsPathsEn = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environment\amd64\WinPE_OCs\en-us\*" -include $Components).FullName
+
+ForEach ($Path in $ComponetsPaths+$ComponetsPathsEn){
+    Add-WindowsPackage -Path $BootPath -PackagePath $Path -IgnoreCheck
+	} 
+Get-WindowsPackage -Path $BootPath |Format-Table -AutoSize
+
+# Add new Start Script to BootImage
+Remove-Item "$BootPath\Windows\System32\startnet.cmd" -Force -ErrorAction SilentlyContinue
+
+$startnetText =@"
+`@ ECHO OFF
+powercfg /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 
+ping 127.0.0.1 -n 20 >NUL
+wpeinit
+"X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" invoke-webrequest "$StartScriptSource" -Outfile X:\Users\Public\Downloads\Start.ps1
+"X:\Windows\system32\WindowsPowerShell\v1.0\powershell.exe" -Executionpolicy Bypass X:\Users\Public\Downloads\Start.ps1
+"@
+
+Add-Content -Path "$BootPath\Windows\System32\startnet.cmd" -Value $startnetText
+
+# Unmount Boot Image
+Dismount-WindowsImage -Path $BootPath -Save
+#Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
+
+###########################################################
+#	Prepareing Install Image
+###########################################################
+
+Write-Host "Preparing Install Image"
+
+# prepare directory f. Install.wim
+Remove-Item $InstWimPath -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $InstWimPath
+
+# mount Install Image
+$InstWimTemp = "$InstMediaPath\sources\Install.wim"
+Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
+Mount-WindowsImage -ImagePath $InstWimTemp -Index:1 -Path $InstWimPath
+
+# inject Intune Profile
+$ProfileJSON | Set-Content -Encoding Ascii "$InstWimPath\Windows\Provisioning\Autopilot\AutopilotConfigurationFile.json"
+
+# Unmount Install Image
+Dismount-WindowsImage -Path $InstWimPath -Save
+#Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
+
+
+###########################################################
+#	Creating Installation Media
+###########################################################
+
+#Create Media
+$Selection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U,C]"
+
+
+Switch ($Selection){
+    I {
+		# Check if the Destination file exists
+		if ((Test-Path $IsoPath)) {
+			New-Item -ItemType Directory -Path $IsoPath
+		}
+		
+		$IsoFileName="$IsoPath\IntuneBootMedia.iso"
+		# Create the ISO file using the appropriate OSCDImg command
+		Write-Host "Creating $IsoFileName..."
+		$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
+		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$oscdString -u1 -udfver102 `"$InstMediaPath`" `"$IsoFileName`""
+		$OSCDResult=Invoke-Expression $oscdimgCmd -PassThru
+
+		# Check the result of the command
+		if ($OSCDResult -ne 0) {
+			Write-Host "ERROR: Failed to create $IsoPath file." -ForegroundColor Red
+			Clear-Path
+			exit 1
+		}
+		
+     }
+    U {
+        $usbDrive = (Get-Disk | Where-Object bustype -eq 'usb')
+        $usbDriveNumber = $usbDrive.Number
+        $AbortYN = Read-Host "All Data on $usbDrive.Model will be deleted ? [Y,N]"
+        Switch ($AbortYN){
+            Y{
+            # Format the USB drive
+            Get-Partition $usbDriveNumber | Remove-Partition
+		    New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
+		    New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" 
+		    Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr"
+            # Copy BootData to P:
+            Write-Host "Copying boot data to disk"
+            Start-Process "$($env:windir)\System32\Robocopy.exe"  "/s /z ""$InstMediaPath"" P: /max:3800000000" -Wait
+			# Copy InstallData to I:
+            Write-Host "Copying Install.wim to disk"
+			New-Item -ItemType Directory -Path "I:\Source"
+			copy-item $InstWimTemp "I:\Source"
+            Write-Host "Ready!"
+            }
+            N{
+            Clear-Path
+            exit 1
+            }
+		}
+
+      }
+    C {
+		Clear-Path
+		exit 0
+	  }
+}
