@@ -52,6 +52,11 @@ Specifies the URL of the startup script to be downloaded and executed by the PE.
 .PARAMETER DriverFolder
 Specifies the source folder for drivers to be injected into the PE image.
 
+.PARAMETER AutounattendFile
+Specifies the path to the autounattend.xml.
+There is an excellent online generator for that file.
+"https://schneegans.de/windows/unattend-generator/"
+
 .PARAMETER ADKPath
 Specifies the installation path of the Windows ADK. If the ADK is not installed, it will be downloaded and installed automatically.
 
@@ -101,6 +106,7 @@ Param (
     [bool]$MultiParitionUSB=$false,
 	[string]$StartScriptSource="https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
 	[string]$DriverFolder="C:\Temp\Drivers",
+    [string]$AutounattendFile="C:\Temp\autounattend.xml",
 	[string]$ADKPath="C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion="10.1.22621.1",
 	[string]$TenantID="22c3b957-8768-4139-8b5e-279747e3ecbf",
@@ -243,12 +249,12 @@ function Get-IntuneJson() {
 ###########################################################
 $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
-if (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))){
+If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))){
 	Write-Host "Admin permissions required!"
 	Exit
 	}
 
-if ((get-disk | Where-Object bustype -eq 'usb').Size -lt 7516192768){
+If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 7516192768){
 	Write-Host "This USB stick is too small!"
 	Exit
 	}  
@@ -295,6 +301,9 @@ Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd
 # aquiere Json Data from tenant
 Connect-MgGraph -TenantId $TenantID -NoWelcome
 $ProfileJSON = Get-IntuneJson -id $ProfileID
+
+#Ask dor media type to build
+$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
 
 ###########################################################
 #	Downloading Installation Media
@@ -385,7 +394,7 @@ FOR /F "tokens=*" %%g IN ('WMIC DISKDRIVE where Interfacetype="SCSI"') do (SET D
 IF "%DISKID%"==0 (diskpart /s X:\Windows\System32\diskpart.txt)
 powercfg /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 
 
-ECHO "Unplug and replug USB Nentwork adapter!"
+ECHO "Unplug and replug USB Network adapter!"
 ping 127.0.0.1 -n 20 >NUL
 
 
@@ -425,6 +434,7 @@ $ProfileJSON | Set-Content -Encoding Ascii "$InstWimPath\Windows\Provisioning\Au
 
 # Unmount Install Image
 Dismount-WindowsImage -Path $InstWimPath -Save -CheckIntegrity
+# Extract selected Windows Version
 Export-WindowsImage -SourceImagePath $InstWimTemp -SourceName $WindowsVersion -DestinationImagePath $InstWimDest
 Remove-Item $InstWimTemp -Force
 Rename-Item $InstWimDest $InstWimTemp
@@ -436,10 +446,8 @@ Rename-Item $InstWimDest $InstWimTemp
 ###########################################################
 
 #Create Media
-$Selection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U,C]"
-
-#To Do Abfrage nach vorne
-Switch ($Selection){
+copy-item $AutounattendFile "$InstMediaPath" -Force
+Switch ($MediaSelection){
     I {
 		# Check if the Destination file exists
 		if ((Test-Path $IsoPath)) {
@@ -462,7 +470,6 @@ Switch ($Selection){
 		
      }
     U {
-        #To Do Größe des Sticks ermitteln, und anpassen wenn single wg FAT32 max Disk Size
         $usbDrive = (Get-Disk | Where-Object bustype -eq 'usb')
         $usbDriveNumber = $usbDrive.Number
         Get-Partition $usbDriveNumber | Remove-Partition
@@ -474,27 +481,26 @@ Switch ($Selection){
             Start-Process "$($env:windir)\System32\Robocopy.exe"  "/s /z ""$InstMediaPath"" P: /max:3800000000" -Wait
             New-Item -ItemType Directory -Path "I:\Source"
             Write-Host "Copying Install.wim to disk"
-            copy-item $InstWimTemp "I:\Source"
+            Copy-Item $InstWimTemp "I:\Source" -Force
             }
         Else{
-            New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE"
+            If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 2199023255552){
+                New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE"
+	            }
+            Else {
+                 New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE"
+                }
             Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
-            #Split the install.wim if greater 4GB
+            #Split the install.wim if greater 4GiB
             If ((Get-Item $InstWimTemp).Length -gt 4294967295){
                 Split-WindowsImage -ImagePath "$InstWimTemp" -SplitImagePath $InstallSWMFile -FileSize 4096 -CheckIntegrity
                 Remove-Item "$InstWimTemp" -Force
                 }
             Start-Process "$($env:windir)\System32\Robocopy.exe"  "/s /z ""$InstMediaPath"" P:" -Wait
             }
-		Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr"
+        Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr"
         Write-Host "Ready!"
       }
-    C {
-        $Cancel=$true
-		Clear-Path
-		exit 0
-	  }
-
 }
 $EndTime = Get-Date
 Write-Host $startTime
