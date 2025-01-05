@@ -1,6 +1,4 @@
-﻿
-
-<#
+﻿<#
 .SYNOPSIS
 	Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
 
