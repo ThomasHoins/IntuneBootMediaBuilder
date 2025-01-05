@@ -60,6 +60,10 @@
 					<Order>4</Order>
 					<Path>reg.exe unload "HKU\DefaultUser"</Path>
 				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>5</Order>
+					<Path>cmd /q /c "FOR %i IN (C D E F G H I J K L N M O P Q R S T U V W X Y Z) DO IF EXIST %i:\WindowsAutoPilotInfo.ps1 powershell -ExecutionPolicy Bypass -File %i:\WindowsAutoPilotInfo.ps1 -Settings %i:Settings.ps1"</Path>
+				</RunSynchronousCommand>
 			</RunSynchronous>
 		</component>
 		<component name="Microsoft-Windows-Deployment" processorArchitecture="arm64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
@@ -79,6 +83,10 @@
 				<RunSynchronousCommand wcm:action="add">
 					<Order>4</Order>
 					<Path>reg.exe unload "HKU\DefaultUser"</Path>
+				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+					<Order>5</Order>
+					<Path>cmd /q /c "FOR %i IN (C D E F G H I J K L N M O P Q R S T U V W X Y Z) DO IF EXIST %i:\WindowsAutoPilotInfo.ps1 powershell -ExecutionPolicy Bypass -File %i:\WindowsAutoPilotInfo.ps1 -Settings %i:Settings.ps1"</Path>
 				</RunSynchronousCommand>
 			</RunSynchronous>
 		</component>
