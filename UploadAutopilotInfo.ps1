@@ -1,3 +1,62 @@
+<#
+.SYNOPSIS
+	Uploads the Client Hash to Intune / Autopilot
+
+.DESCRIPTION
+	This script uploads the Client Hash to Intune / Autopilot
+	- The script requires administrative privileges.
+ 	This is a derivat of the original "https://www.powershellgallery.com/packages/Get-WindowsAutoPilotInfo" which did not work for me in that stage. 
+
+.NOTES
+
+	Version:		0.1
+	Author: 		Thomas Hoins 
+				Datagroup OIT
+ 	initial Date:	05.01.2025
+ 	Changes: 	05.01.2025	Minor changes
+
+.LINK
+	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
+
+.COMPONENT
+	Requires an Application Registration for MSGraph, to be able to log on.
+
+.PARAMETER GroupTag
+Specifies the Clients GroupTag.
+
+.PARAMETER AssignedUser
+Specifies the User, to be assigned to the Client. It is not neccessary to assign a user.
+
+.PARAMETER Settings
+Specifies the path to the Settings file, which has to contain the information to log on to Intune.
+
+.PARAMETER Wifi
+Specifies the name of the WiFi Network to use during the installation. A XML file with the required information needs to reside within the 
+same directory as the calling script.
+
+.PARAMETER TenantId
+Speciefies the Tenant ID of your Entra ID.
+The TenantId only needs to be set if no Settings file is supplied.
+
+.PARAMETER AppId
+Specifies the AppId and only needs to be set if no Settings file is supplied.
+
+.PARAMETER AppSecret
+Specifies the AppSecret and only needs to be set if no Settings file is supplied.
+
+.PARAMETER Assign
+Specifies the Assign parameter and only needs to be set if no Settings file is supplied.
+
+.INPUTS
+This script does not need any inputs except the Settings file.
+
+.OUTPUTS
+The script generates and uploads the Clients Hash to Intune/Autopilot.
+
+.EXAMPLE
+PS> WindowsAutoPilotInfo.ps1 -Settings D:\Settings.ps1
+
+#>
 
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param(
