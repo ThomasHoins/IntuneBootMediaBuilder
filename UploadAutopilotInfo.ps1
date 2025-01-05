@@ -62,7 +62,7 @@ PS> WindowsAutoPilotInfo.ps1 -Settings D:\Settings.ps1
 param(
     [Parameter(Mandatory = $False)] [String] $GroupTag = "",
     [Parameter(Mandatory = $False)] [String] $AssignedUser = "",
-    [Parameter(Mandatory = $False)] [String] $Settings = "D:\Settings.ps1", #Default location
+    [Parameter(Mandatory = $False)] [String] $Settings = ".\Settings.ps1", #Default location
     [Parameter(Mandatory = $False)] [String] $Wifi = "",
     [Parameter(Mandatory = $False)] [String] $TenantId = "",
     [Parameter(Mandatory = $False)] [String] $AppId = "",
