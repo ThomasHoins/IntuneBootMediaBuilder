@@ -98,8 +98,10 @@ Param (
 	[string]$PEPath,
 	[string]$IsoPath,
 	[string]$DownloadISO, #="https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=23e54b6a-020f-4f2b-ae70-e1e52676ea1c&P1=1734172137&P2=601&P3=2&P4=QToZDn6aVi4krTph%2fkSVvhS9RPAacWYuSb54K3mwuNrDZ6Vkh%2bil6BjCeoqf9bvAXns96krwYEbFjFiqocRaYNiGewxgN0YWFUKIttmo%2fVNNRKoXBlnlIy0omYT1ljweXzYUU17cJXEq3vtVHKT45mxVqbgainFJEDr%2brpEjK32FsfBIPG9FTvrl8dESy%2bhZ1KFyw7N0FXCXt1CaLipsfvkV49fr4a0EYnnVsIzDPIB1Cxpv9rSeOVtYchsPpWufYuq88cGH0tuyJWrK5IrHvDGbjnwBuQtX9WQ7dYPwdIwU7WYoH4SYh3%2fGnDbMfnGQMY4j7ap0qpE%2bIT4cuMriBA%3d%3d",
-	[string]$InstallLanguage = "en-us",	
+	[string]$InstallLanguage = "English International", #Arabic, Brazilian Portuguese, Bulgarian, Chinese (Simplified), Chinese (Traditional), Croatian, Czech, Danish, Dutch, English, English International, Estonian, Finnish, French, French Canadian, German, Greek, Hebrew, Hungarian, Italian, Japanese, Korean, Latvian, Lithuanian, Norwegian, Polish, Portuguese, Romanian, Russian, Serbian Latin, Slovak, Slovenian, Spanish, Spanish (Mexico), Swedish, Thai, Turkish, Ukrainian	
+	[string]$WindowsEdition = "Windows 11 Home/Pro/Edu", #Download Edition	
 	[string]$WindowsVersion = "Windows 11 Pro",	
+	[string]$AutocreateWifiProfile= $true,
 	[string]$TempFolder = "C:\Temp",
 	[string]$OutputFolder,
 	[bool]$MultiParitionUSB = $false,
@@ -109,6 +111,8 @@ Param (
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion = "10.1.22621.1",
 	[string]$TenantID = "22c3b957-8768-4139-8b5e-279747e3ecbf",
+	[string]$AppId = "31f7ef0c-9662-4522-bb32-f1b8c2d5a7c3",
+	[string]$AppSecret = "b_u8Q~kVtK6Es0BAmtvB~wq4pvfWoY1vVUGnTahX",
 	[string]$ProfileID = "41b669f0-86d4-4363-b666-5046469d0611"
 )	
 
@@ -318,16 +322,15 @@ $MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]
 #Get FIDO and download Windows 11 installation ISO
 If (([string]::IsNullOrEmpty($DownloadISO) )) {
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
-	$DownloadISO = & "$WorkPath\Fido.ps1" -geturl
+	$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
 	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 	$UseFido = $true
 	#make window visable again
 	[WinAPI.Utils]::ShowWindow(([System.Diagnostics.Process]::GetCurrentProcess() | Get-Process).MainWindowHandle, 1) | Out-Null
 }
 If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
-	Write-Host "Downloading installation ISO please be patient!"
+	Write-Host "Downloading installation ISO please be patient!" -ForegroundColor Red
 	$startime = Get-Date
-	#Start-BitsTransfer -Source $DownloadISO -Destination "$WorkPath\Installation.iso"
 	$origProgressPreference =$ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
 	Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
@@ -340,7 +343,7 @@ If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 }
 
 If (Test-Path -PathType Leaf $WorkPath\Installation.iso) {
-	Write-Host "Copying installation iata to Temp folder"
+	Write-Host "Copying installation data to Temp folder"
 	$InstVol = Mount-DiskImage -ImagePath $WorkPath\Installation.iso | Get-Volume
 	$InstDriveLetter = "$($InstVol.DriveLetter):"
 	$InstMediaPath = "$WorkPath\$($InstVol.FileSystemLabel)"
@@ -461,6 +464,32 @@ Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMedia
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/UploadAutopilotInfo.ps1" -Outfile "$InstMediaPath\UploadAutopilotInfo.ps1"
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml" -Outfile "$InstMediaPath\autounattend.xml"
 
+#Create Wifi Profile
+If (AutocreateWifiProfile){
+	$GUID = (Get-NetAdapter -Name "WLAN").interfaceGUID
+	$path = "C:\ProgramData\Microsoft\Wlansvc\Profiles\Interfaces\$GUID"
+	$Profiles = Get-ChildItem -Path $path 
+	foreach ($Profile in $Profiles) {
+		[xml]$c = Get-Content -path $Profile.fullname
+		$Name = $c.WLANProfile.name
+		Copy-Item $Profile.fullname "$InstMediaPath\$Name.xml"
+		Break #remove if only the first profile does not work
+	}
+	$content = Get-Content "$InstMediaPath\Settings.ps1"
+	$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
+	$content= $content.Replace( $line,"[string]`$Wifi = ""$Name""") 
+	Set-Content "$InstMediaPath\Settings.ps1" -Value $content
+}
+
+#Add the $TenantId, $AppId, $AppSecret in the Setting with the values from parameters
+$content = Get-Content "$InstMediaPath\Settings.ps1"
+$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "TenantId =" | Select-Object -ExpandProperty Line
+$content= $content.Replace( $line,"[string]`$TenantId = ""$TenantID""") 
+$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppId =" | Select-Object -ExpandProperty Line
+$content= $content.Replace( $line,"[string]`$AppId = ""$AppId""") 
+$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppSecret =" | Select-Object -ExpandProperty Line
+$content= $content.Replace( $line,"[string]`$AppSecret = ""$AppSecret""") 
+Set-Content "$InstMediaPath\Settings.ps1" -Value $content
 
 
 ###########################################################
