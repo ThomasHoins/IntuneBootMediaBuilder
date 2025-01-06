@@ -335,7 +335,7 @@ Begin {
     
     }
 
-    Function Change-AutoPilotDeviceGroupTag {
+    Function Set-AutoPilotDeviceGroupTag {
         [cmdletbinding()]
         param(   
             [Parameter(Mandatory = $true)] [string]$GroupTag,
@@ -438,7 +438,7 @@ End {
         Write-Host "This device has the current Group tag: $currentGrouptag" -ForegroundColor Magenta
         if ($currentGrouptag -ne $GroupTag) {
             $id= $device.id
-            Change-AutoPilotDeviceGroupTag -GroupTag $GroupTag -Id $id
+            Set-AutoPilotDeviceGroupTag -GroupTag $GroupTag -Id $id
             $processingCount = 0
             $GroupTagBad=$false
             while($currentGrouptag -ne $GroupTag){
