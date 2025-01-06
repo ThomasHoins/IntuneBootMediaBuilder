@@ -17,6 +17,34 @@ A PowerShell script to create bootable USB media or ISO files with a customized 
 - [Windows ADK](https://learn.microsoft.com/en-us/windows-hardware/get-started/adk-install) compatible with your operating system version.
 - Internet connection for downloading the startup script and ADK, if not already installed.
 - A USB flash drive with at least 8 GB capacity (if creating a bootable USB).
+- Exported Wifi profile (optional)
+- An AzureAD App Registration
+  - Add the following API permissions:
+    Microsoft Graph -> Application Permissions ->
+
+      DeviceManagementConfiguration.ReadWrite.All
+      DeviceManagementManagedDevices.ReadWrite.All 
+      DeviceManagementServiceConfig.ReadWrite.All
+      Grant admin consent for permissions
+
+      Copy the client ID and Tenant ID and Secret values, and paste to "Settings.ps1" under corresponding variables
+
+During the USB media cration a autounattended.xml will be copied to the Installation media. You can use the "https://schneegans.de/windows/unattend-generator" to modify this.
+Make sure that the following entry is added to your script suring the "specialize" phase. Also make sure to modify the "<Order>1</Order>" entry to the appropriate number.
+
+<component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <RunSynchronous>
+      <RunSynchronousCommand wcm:action="add">
+        <Order>1</Order>
+        <Path>cmd /q /c "FOR %i IN (C D E F G H I J K L N M O P Q R S T U V W X Y Z) DO IF EXIST %i:\WindowsAutoPilotInfo.ps1 powershell -ExecutionPolicy Bypass -File %i:\WindowsAutoPilotInfo.ps1 -Settings %i:Settings.ps1"</Path>
+        <Description>Run AutoPilot script</Description>
+      </RunSynchronousCommand>
+    </RunSynchronous>
+</component>
+Boot installer. Windows should install and run the script to upload the device to AutoPilot.
+
+
+
 
 ## Parameters
 
