@@ -345,7 +345,7 @@ $MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]
 If (([string]::IsNullOrEmpty($DownloadISO) )) {
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
 	#you can only use the script 3 times and then you have to wait 24h, restrictions of the MS web page.
-	If ((Get-Item "$WorkPath\DownloadIso.txt").CreationTime -gt (Get-Date).AddHours(-24)){
+	If ((Get-Item "$WorkPath\DownloadIso.txt" -ErrorAction SilentlyContinue ).CreationTime -gt (Get-Date).AddHours(-24)){
 		$DownloadISO = Get-Content "$WorkPath\DownloadIso.txt"
 	}
 	Else{
