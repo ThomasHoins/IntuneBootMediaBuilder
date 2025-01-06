@@ -22,9 +22,9 @@ A PowerShell script to create bootable USB media or ISO files with a customized 
   - Add the following API permissions:
     Microsoft Graph -> Application Permissions ->
 
-      `DeviceManagementConfiguration.ReadWrite.All`
-      `DeviceManagementManagedDevices.ReadWrite.All`
-      `DeviceManagementServiceConfig.ReadWrite.All`
+      -`DeviceManagementConfiguration.ReadWrite.All`
+      -`DeviceManagementManagedDevices.ReadWrite.All`
+      -`DeviceManagementServiceConfig.ReadWrite.All`
     Grant admin consent for permissions
 
       Copy the client ID and Tenant ID and Secret values, and paste to "Settings.ps1" under corresponding variables
