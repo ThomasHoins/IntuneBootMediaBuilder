@@ -443,7 +443,12 @@ Rename-Item $InstWimDest $InstWimTemp
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Start.ps1?token=GHSAT0AAAAAAC42XH5J6GEXIOJBB2MA7FJYZ33SG5A" -Outfile "$InstMediaPath\Start.ps1"
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/UploadAutopilotInfo.ps1?token=GHSAT0AAAAAAC42XH5IJSICZNDDF7TF3YPIZ33SITQ" -Outfile "$InstMediaPath\UploadAutopilotInfo.ps1"
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml?token=GHSAT0AAAAAAC42XH5JPM4PBGTDYZWRW5PMZ33SLCA" -Outfile "$InstMediaPath\autounattend.xml"
-Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml?token=GHSAT0AAAAAAC42XH5JPM4PBGTDYZWRW5PMZ33SLCA" -Outfile "$InstMediaPath\autounattend.xml"
+#Add minimal Surfcace Drivers
+If (!(Test-Path -PathType Leaf $WorkPath\Drivers)){
+	Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Drivers.zip?token=GHSAT0AAAAAAC42XH5JFMCON6S25YMBHSTSZ33U67Q" -Outfile "$WorkPath\Drivers.zip"
+	Expand-Archive -LiteralPath "$WorkPath\Drivers.zip" -DestinationPath $WorkPath
+	Remove-Item "$WorkPath\Drivers.zip" -Force -ErrorAction SilentlyContinue
+}
 
 
 ###########################################################
