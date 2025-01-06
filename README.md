@@ -32,6 +32,7 @@ A PowerShell script to create bootable USB media or ISO files with a customized 
 During the USB media cration a autounattended.xml will be copied to the Installation media. You can use the "https://schneegans.de/windows/unattend-generator" to modify this.
 Make sure that the following entry is added to your script suring the "specialize" phase. Also make sure to modify the "<Order>1</Order>" entry to the appropriate number.
 
+```
 <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <RunSynchronous>
       <RunSynchronousCommand wcm:action="add">
@@ -41,7 +42,7 @@ Make sure that the following entry is added to your script suring the "specializ
       </RunSynchronousCommand>
     </RunSynchronous>
 </component>
-Boot installer. Windows should install and run the script to upload the device to AutoPilot.
+```
 
 
 
