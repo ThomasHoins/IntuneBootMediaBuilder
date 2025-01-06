@@ -576,8 +576,8 @@ Switch ($MediaSelection) {
 		Get-Partition $usbDriveNumber | Remove-Partition
 		If ($MultiParitionUSB) {
 			#rework this part, all Setup stuff has to go to I: !
-			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false
-			New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" -Confirm:$false
+			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
+			New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" -Confirm:$false -Force
 			Write-Host "Copying boot data to disk"
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P: /max:3800000000" -Wait -NoNewWindow
 			New-Item -ItemType Directory -Path "I:\Source"
@@ -586,10 +586,10 @@ Switch ($MediaSelection) {
 		}
 		Else {
 			If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 2199023255552) {
-				New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false
+				New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			}
 			Else {
-				New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false
+				New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			}
 			Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 			#Split the install.wim if greater 4GiB
