@@ -69,6 +69,10 @@ Make sure that the following entry is added to your script suring the "specializ
 
 A collection of useful links:
 
+https://github.com/bokkoman/IntuneAutoPilot/blob/main/README.md
+
+https://schneegans.de/windows/unattend-generator"
+
 https://www.osdcloud.com/sandbox/winpe-downloads
 
 Windows 11 22H2 WinRE with KB5026372:
