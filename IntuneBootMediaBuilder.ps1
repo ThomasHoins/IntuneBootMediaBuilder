@@ -406,7 +406,7 @@ ForEach ($Path in $ComponetsPaths + $ComponetsPathsEn) {
 	Copy-Item $Path $PackageTemp
 } 
 Add-WindowsPackage -Path $BootPath -PackagePath $PackageTemp -IgnoreCheck
-Get-WindowsPackage -Path $BootPath | Format-Table -AutoSize
+Get-WindowsPackage -Path $BootPath | Format-Table -AutoSize | Out-File "$WorkPath\Components.txt"
 
 # Add new Start Script to BootImage
 Remove-Item "$BootPath\Windows\System32\startnet.cmd" -Force -ErrorAction SilentlyContinue
