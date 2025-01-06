@@ -116,7 +116,8 @@ Param (
 	[string]$PEPath,
 	[string]$IsoPath,
 	[string]$DownloadISO, #="https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=23e54b6a-020f-4f2b-ae70-e1e52676ea1c&P1=1734172137&P2=601&P3=2&P4=QToZDn6aVi4krTph%2fkSVvhS9RPAacWYuSb54K3mwuNrDZ6Vkh%2bil6BjCeoqf9bvAXns96krwYEbFjFiqocRaYNiGewxgN0YWFUKIttmo%2fVNNRKoXBlnlIy0omYT1ljweXzYUU17cJXEq3vtVHKT45mxVqbgainFJEDr%2brpEjK32FsfBIPG9FTvrl8dESy%2bhZ1KFyw7N0FXCXt1CaLipsfvkV49fr4a0EYnnVsIzDPIB1Cxpv9rSeOVtYchsPpWufYuq88cGH0tuyJWrK5IrHvDGbjnwBuQtX9WQ7dYPwdIwU7WYoH4SYh3%2fGnDbMfnGQMY4j7ap0qpE%2bIT4cuMriBA%3d%3d",
-	[string]$InstallLanguage = "English International", #Arabic, Brazilian Portuguese, Bulgarian, Chinese (Simplified), Chinese (Traditional), Croatian, Czech, Danish, Dutch, English, English International, Estonian, Finnish, French, French Canadian, German, Greek, Hebrew, Hungarian, Italian, Japanese, Korean, Latvian, Lithuanian, Norwegian, Polish, Portuguese, Romanian, Russian, Serbian Latin, Slovak, Slovenian, Spanish, Spanish (Mexico), Swedish, Thai, Turkish, Ukrainian	
+	[string]$InstallLanguage = "English", #Arabic, Brazilian Portuguese, Bulgarian, Chinese (Simplified), Chinese (Traditional), Croatian, Czech, Danish, Dutch, English, English International, Estonian, Finnish, French, French Canadian, German, Greek, Hebrew, Hungarian, Italian, Japanese, Korean, Latvian, Lithuanian, Norwegian, Polish, Portuguese, Romanian, Russian, Serbian Latin, Slovak, Slovenian, Spanish, Spanish (Mexico), Swedish, Thai, Turkish, Ukrainian	
+	[string]$Locale = "en-US", #en-US, de-DE, fr-FR, es-ES, it-IT, ja-JP, ko-KR, zh-CN, Override the default Locale
 	[string]$WindowsEdition = "Windows 11 Home/Pro/Edu", #Download Edition	
 	[string]$WindowsVersion = "Windows 11 Pro",	
 	[string]$AutocreateWifiProfile= $true,
@@ -577,8 +578,13 @@ Switch ($MediaSelection) {
 			}
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P:" -Wait -NoNewWindow
 		}
-		Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr" -NoNewWindow
-		Write-Host "Ready!"
+		try {
+			Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr" -NoNewWindow -Wait
+		} catch {
+			Write-Host "An error occurred: $_" -ForegroundColor Red
+		} finally {
+			Write-Host "Ready!" -ForegroundColor Green
+		}
 	}
 }
 $EndTime = Get-Date
