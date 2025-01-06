@@ -285,7 +285,10 @@ If (([string]::IsNullOrEmpty($WorkPath))) {
 
 #Add minimal Surfcace Drivers
 If (!(Test-Path -PathType Leaf $WorkPath\Drivers)) {
-	Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Drivers.zip?token=GHSAT0AAAAAAC42XH5JFMCON6S25YMBHSTSZ33U67Q" -Outfile "$TempFolder\Drivers.zip"
+	$origProgressPreference =$ProgressPreference
+	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
+	Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Drivers.zip" -Outfile "$TempFolder\Drivers.zip"
+	$ProgressPreference = $origProgressPreference
 	Expand-Archive -LiteralPath "$TempFolder\Drivers.zip" -DestinationPath $TempFolder
 	Remove-Item "$TempFolder\Drivers.zip" -Force -ErrorAction SilentlyContinue
 }	
@@ -322,7 +325,14 @@ $MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]
 #Get FIDO and download Windows 11 installation ISO
 If (([string]::IsNullOrEmpty($DownloadISO) )) {
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
-	$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
+	#you can only use the script 3 times and then you have to wait 24h, restrictions of the MS web page.
+	If ((Get-Item "$WorkPath\DownloadIso.txt").CreationTime -gt (Get-Date).AddHours(-24)){
+		$DownloadISO = Get-Content "$WorkPath\DownloadIso.txt"
+	}
+	Else{
+		$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
+		Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
+	}
 	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 	$UseFido = $true
 	#make window visable again
