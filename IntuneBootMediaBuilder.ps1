@@ -107,7 +107,7 @@ Param (
 	[bool]$MultiParitionUSB = $false,
 	[string]$StartScriptSource = "https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
 	[string]$DriverFolder = "C:\Temp\Drivers",
-	[string]$AutounattendFile = "C:\Temp\autounattend.xml",
+	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion = "10.1.22621.1",
 	[string]$TenantID = "22c3b957-8768-4139-8b5e-279747e3ecbf",
@@ -125,10 +125,10 @@ function Clear-Path {
 	Write-Host "Cleaning up files"
 	Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
 	#Disconnect-MgGraph
-	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
-	Remove-Item $BootPath -Recurse -Force -ErrorAction SilentlyContinue
-	Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue
-	Remove-Item $InstWimTemp -Recurse -Force -ErrorAction SilentlyContinue
+	If ($PEPath) {Remove-Item $PEPath -Recurse -Force}
+	If ($BootPath) { Remove-Item $BootPath -Recurse -Force}
+	If ($InstMediaPath) { Remove-Item $InstMediaPath -Recurse -Force}
+	If ($InstWimTemp) { Remove-Item $InstWimTemp -Recurse -Force}
 }
 
 function Get-IntuneJson() {
@@ -536,8 +536,8 @@ Switch ($MediaSelection) {
 		Get-Partition $usbDriveNumber | Remove-Partition
 		If ($MultiParitionUSB) {
 			#rework this part, all Setup stuff has to go to I: !
-			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
-			New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" 
+			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false
+			New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" -Confirm:$false
 			Write-Host "Copying boot data to disk"
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P: /max:3800000000" -Wait -NoNewWindow
 			New-Item -ItemType Directory -Path "I:\Source"
@@ -546,10 +546,10 @@ Switch ($MediaSelection) {
 		}
 		Else {
 			If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 2199023255552) {
-				New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE"
+				New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false
 			}
 			Else {
-				New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE"
+				New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false
 			}
 			Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 			#Split the install.wim if greater 4GiB
