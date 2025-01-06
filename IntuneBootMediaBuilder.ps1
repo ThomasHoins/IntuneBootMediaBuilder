@@ -319,6 +319,7 @@ If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")){
 	Write-Host "Downloading installation ISO please be patient!"
 	#Start-BitsTransfer -Source $DownloadISO -Destination "$WorkPath\Installation.iso"
     Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
+	New-Item "$WorkPath\binschonda.txt"
 	}
 
 If (Test-Path -PathType Leaf $WorkPath\Installation.iso){

@@ -532,7 +532,6 @@ End {
                     $processingCount = $processingCount + 1
                 }
             }
-            $deviceCount = $autopilotDevices.Length
             Write-Host "Waiting for device profile to be assigned"
             if ($processingCount -gt 0) {
                 Start-Sleep 30
