@@ -6,6 +6,7 @@
 	This script uploads the Client Hash to Intune / Autopilot
 	- The script requires administrative privileges.
  	This is a derivat of the original "https://www.powershellgallery.com/packages/Get-WindowsAutoPilotInfo" which did not work for me in that stage. 
+	This has been Created with inspirations from https://github.com/bokkoman/IntuneAutoPilot.
 
 .NOTES
 
