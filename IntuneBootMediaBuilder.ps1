@@ -98,6 +98,7 @@ Param (
 	[string]$PEPath,
 	[string]$IsoPath,
 	[string]$DownloadISO, #="https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=23e54b6a-020f-4f2b-ae70-e1e52676ea1c&P1=1734172137&P2=601&P3=2&P4=QToZDn6aVi4krTph%2fkSVvhS9RPAacWYuSb54K3mwuNrDZ6Vkh%2bil6BjCeoqf9bvAXns96krwYEbFjFiqocRaYNiGewxgN0YWFUKIttmo%2fVNNRKoXBlnlIy0omYT1ljweXzYUU17cJXEq3vtVHKT45mxVqbgainFJEDr%2brpEjK32FsfBIPG9FTvrl8dESy%2bhZ1KFyw7N0FXCXt1CaLipsfvkV49fr4a0EYnnVsIzDPIB1Cxpv9rSeOVtYchsPpWufYuq88cGH0tuyJWrK5IrHvDGbjnwBuQtX9WQ7dYPwdIwU7WYoH4SYh3%2fGnDbMfnGQMY4j7ap0qpE%2bIT4cuMriBA%3d%3d",
+	[string]$InstallLanguage = "en-us",	
 	[string]$WindowsVersion = "Windows 11 Pro",	
 	[string]$TempFolder = "C:\Temp",
 	[string]$OutputFolder,
@@ -318,6 +319,7 @@ $MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]
 If (([string]::IsNullOrEmpty($DownloadISO) )) {
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
 	$DownloadISO = & "$WorkPath\Fido.ps1" -geturl
+	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 	$UseFido = $true
 	#make window visable again
 	[WinAPI.Utils]::ShowWindow(([System.Diagnostics.Process]::GetCurrentProcess() | Get-Process).MainWindowHandle, 1) | Out-Null
@@ -455,9 +457,9 @@ Remove-Item $InstWimTemp -Force
 Rename-Item $InstWimDest $InstWimTemp
 
 #Add Installation Files to $InstMediaPath
-Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Start.ps1?token=GHSAT0AAAAAAC42XH5J6GEXIOJBB2MA7FJYZ33SG5A" -Outfile "$InstMediaPath\Start.ps1"
-Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/UploadAutopilotInfo.ps1?token=GHSAT0AAAAAAC42XH5IJSICZNDDF7TF3YPIZ33SITQ" -Outfile "$InstMediaPath\UploadAutopilotInfo.ps1"
-Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml?token=GHSAT0AAAAAAC42XH5JPM4PBGTDYZWRW5PMZ33SLCA" -Outfile "$InstMediaPath\autounattend.xml"
+Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Settings.ps1" -Outfile "$InstMediaPath\Settings.ps1"
+Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/UploadAutopilotInfo.ps1" -Outfile "$InstMediaPath\UploadAutopilotInfo.ps1"
+Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml" -Outfile "$InstMediaPath\autounattend.xml"
 
 
 
