@@ -36,7 +36,7 @@ Specifies the target path for the ISO file. If no path is provided, the ISO will
 Specifies the Windows Version, to extract from the install.wim.
 
 .PARAMETER DownloadISO
-Specifies the the source, where the installation ISO will be donloaded. If not supplied, it will try to use the FIDO Tool to download one from Microsoft.
+Specifies the the source, where the installation ISO will be downloaded. If not supplied, it will try to use the FIDO Tool to download one from Microsoft.
 
 .PARAMETER TempFolder
 Specifies the path to the temporary folder. Default is `C:\Temp`.
@@ -62,12 +62,30 @@ Specifies the installation path of the Windows ADK. If the ADK is not installed,
 Specifies the version of the Windows ADK to be installed. The default is `10.1.22621.1`. This version should match the version of the installed operating system.
 
 .PARAMETER TenantID
-Speciefies the Tenant ID of your Entra ID.
-This can be aquired at the Overview page of your Entra 
+Specifies the Tenant ID of your Entra ID.
+This can be acquired at the Overview page of your Entra.
 
 .PARAMETER ProfileID
-Specifies the ProfileID that is requied to select the Autopilot Profile. Can be aqired with the following command after connecting to Graph. 
+Specifies the ProfileID that is required to select the Autopilot Profile. Can be acquired with the following command after connecting to Graph:
 (Invoke-MGGraphRequest -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeploymentProfiles" -Method Get).Value
+
+.PARAMETER InstallLanguage
+Specifies the language for the installation. Default is "English International".
+
+.PARAMETER WindowsEdition
+Specifies the Windows edition to download. Default is "Windows 11 Home/Pro/Edu".
+
+.PARAMETER AutocreateWifiProfile
+Specifies whether to automatically create a Wi-Fi profile. Default is $true.
+
+.PARAMETER MultiParitionUSB
+Specifies whether to create multiple partitions on the USB stick. Default is $false.
+
+.PARAMETER AppId
+Specifies the Application ID for authentication.
+
+.PARAMETER AppSecret
+Specifies the Application Secret for authentication.
 
 .INPUTS
 This script does not accept piped inputs.
