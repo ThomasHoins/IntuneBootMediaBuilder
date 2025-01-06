@@ -18,7 +18,11 @@ A PowerShell script to create bootable USB media or ISO files with a customized 
 - Internet connection for downloading the startup script and ADK, if not already installed.
 - A USB flash drive with at least 8 GB capacity (if creating a bootable USB).
 - Exported Wifi profile (optional)
-- An AzureAD App Registration
+    1. Create a local folder for the exported Wi-Fi profiles, such as c:\WiFi.
+    2. Open a command prompt as an administrator.
+    3. Run the netsh wlan show profiles command. Note the name of the profile you want to export.
+    4. Run the netsh wlan export profile name="ContosoWiFi" folder=c:\Wifi command. This command creates a Wi-Fi profile file named Wi-Fi-ContosoWiFi.xml in your target folder.
+- An AzureAD App Registration (https://learn.microsoft.com/en-us/mem/intune/developer/intune-graph-apis)
   - Add the following API permissions:
     Microsoft Graph -> Application Permissions ->
       - `DeviceManagementConfiguration.ReadWrite.All`

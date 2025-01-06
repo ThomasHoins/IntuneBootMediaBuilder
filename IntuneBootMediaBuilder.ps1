@@ -312,6 +312,7 @@ If (([string]::IsNullOrEmpty($DownloadISO) )){
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
 	$DownloadISO=& "$WorkPath\Fido.ps1" -geturl
 	$UseFido=$true
+	#make window visable again
     [WinAPI.Utils]::ShowWindow(([System.Diagnostics.Process]::GetCurrentProcess() | Get-Process).MainWindowHandle, 1) | Out-Null
 	}
 If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")){
