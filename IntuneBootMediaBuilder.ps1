@@ -325,7 +325,10 @@ If (([string]::IsNullOrEmpty($DownloadISO) )) {
 If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 	Write-Host "Downloading installation ISO please be patient!"
 	#Start-BitsTransfer -Source $DownloadISO -Destination "$WorkPath\Installation.iso"
+	$origProgressPreference =$ProgressPreference
+	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
 	Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
+	$ProgressPreference = $origProgressPreference
 	New-Item "$WorkPath\binschonda.txt"
 }
 
