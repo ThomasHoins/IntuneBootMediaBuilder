@@ -359,7 +359,7 @@ If (Test-Path -PathType Leaf $WorkPath\Installation.iso) {
 	$InstMediaPath = "$WorkPath\$($InstVol.FileSystemLabel)"
 	Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue
 	New-Item -ItemType Directory -Path $InstMediaPath
-	Start-Process "$($env:windir)\System32\Robocopy.exe" "/s /z ""$InstDriveLetter"" ""$InstMediaPath""" -Wait 
+	Start-Process "$($env:windir)\System32\Robocopy.exe" "/NP /s /z ""$InstDriveLetter"" ""$InstMediaPath""" -Wait -NoNewWindow
 	Dismount-DiskImage -ImagePath $WorkPath\Installation.iso
 }
 Else {
@@ -475,7 +475,7 @@ Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMedia
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml" -Outfile "$InstMediaPath\autounattend.xml"
 
 #Create Wifi Profile
-If (AutocreateWifiProfile){
+If ($AutocreateWifiProfile){
 	$GUID = (Get-NetAdapter -Name "WLAN").interfaceGUID
 	$path = "C:\ProgramData\Microsoft\Wlansvc\Profiles\Interfaces\$GUID"
 	$Profiles = Get-ChildItem -Path $path 
@@ -539,7 +539,7 @@ Switch ($MediaSelection) {
 			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" 
 			New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" 
 			Write-Host "Copying boot data to disk"
-			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/s /z ""$InstMediaPath"" P: /max:3800000000" -Wait
+			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P: /max:3800000000" -Wait -NoNewWindow
 			New-Item -ItemType Directory -Path "I:\Source"
 			Write-Host "Copying Install.wim to disk"
 			Copy-Item $InstWimTemp "I:\Source" -Force
@@ -557,9 +557,9 @@ Switch ($MediaSelection) {
 				Split-WindowsImage -ImagePath "$InstWimTemp" -SplitImagePath $InstallSWMFile -FileSize 4096 -CheckIntegrity
 				Remove-Item "$InstWimTemp" -Force
 			}
-			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/s /z ""$InstMediaPath"" P:" -Wait
+			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P:" -Wait -NoNewWindow
 		}
-		Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr"
+		Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr" -NoNewWindow
 		Write-Host "Ready!"
 	}
 }
