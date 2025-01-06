@@ -77,6 +77,8 @@ https://github.com/bokkoman/IntuneAutoPilot/blob/main/README.md
 
 https://schneegans.de/windows/unattend-generator"
 
+https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/update-windows-settings-and-scripts-create-your-own-answer-file-sxs?view=windows-11
+
 https://www.osdcloud.com/sandbox/winpe-downloads
 
 Windows 11 22H2 WinRE with KB5026372:
