@@ -125,7 +125,7 @@ Param (
 	[string]$Locale = "en-US", #en-US, de-DE, fr-FR, es-ES, it-IT, ja-JP, ko-KR, zh-CN, Override the default Locale
 	[string]$WindowsEdition = "Windows 11 Home/Pro/Edu", #Download Edition	
 	[string]$WindowsVersion = "Windows 11 Pro",	
-	[string]$AutocreateWifiProfile= $true,
+	[string]$AutocreateWifiProfile = $true,
 	[string]$TempFolder = "C:\Temp",
 	[string]$OutputFolder,
 	[bool]$MultiParitionUSB = $false,
@@ -149,10 +149,10 @@ function Clear-Path {
 	Write-Host "Cleaning up files"
 	Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
 	#Disconnect-MgGraph
-	If ($PEPath) {Remove-Item $PEPath -Recurse -Force}
-	If ($BootPath) { Remove-Item $BootPath -Recurse -Force}
-	If ($InstMediaPath) { Remove-Item $InstMediaPath -Recurse -Force}
-	If ($InstWimTemp) { Remove-Item $InstWimTemp -Recurse -Force}
+	If ($PEPath) { Remove-Item $PEPath -Recurse -Force }
+	If ($BootPath) { Remove-Item $BootPath -Recurse -Force }
+	If ($InstMediaPath) { Remove-Item $InstMediaPath -Recurse -Force }
+	If ($InstWimTemp) { Remove-Item $InstWimTemp -Recurse -Force }
 }
 
 function Get-IntuneJson() {
@@ -304,7 +304,7 @@ If (([string]::IsNullOrEmpty($WorkPath))) {
 
 #Add minimal Surfcace Drivers
 If (!(Test-Path -PathType Container $TempFolder\Drivers)) {
-	$origProgressPreference =$ProgressPreference
+	$origProgressPreference = $ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
 	Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Drivers.zip" -Outfile "$TempFolder\Drivers.zip"
 	$ProgressPreference = $origProgressPreference
@@ -350,28 +350,38 @@ If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 7516192768 -and $MediaS
 If ([string]::IsNullOrEmpty($DownloadISO) ) {
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
 	#you can only use the script 3 times and then you have to wait 24h, restrictions of the MS web page.
-	if  (Test-Path -PathType Leaf "$WorkPath\DownloadIso.txt"){
-		If ((Get-Item "$WorkPath\DownloadIso.txt").CreationTime -gt (Get-Date).AddHours(-24)){
+	if (Test-Path -PathType Leaf "$WorkPath\DownloadIso.txt") {
+		If ((Get-Item "$WorkPath\DownloadIso.txt").CreationTime -gt (Get-Date).AddHours(-24)) {
 			$DownloadISO = Get-Content "$WorkPath\DownloadIso.txt"
 		}
-		Else{
+		Else {
 			$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
 			Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 		}
 	}
-	Else{
+	Else {
 		$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
 		Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 	}
 	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 	$UseFido = $true
-	#make window visable again
-	[WinAPI.Utils]::ShowWindow(([System.Diagnostics.Process]::GetCurrentProcess() | Get-Process).MainWindowHandle, 1) | Out-Null
+	# Make window visible again
+	Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinAPI {
+	[DllImport("user32.dll")]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
+	$hwnd = (Get-Process -Id $PID).MainWindowHandle
+	[WinAPI]::ShowWindow($hwnd, 1) | Out-Null
 }
 If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 	Write-Host "Downloading installation ISO please be patient!" -ForegroundColor Red
 	$startime = Get-Date
-	$origProgressPreference =$ProgressPreference
+	$origProgressPreference = $ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
 	Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
 	$ProgressPreference = $origProgressPreference
@@ -505,7 +515,7 @@ Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMedia
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml" -Outfile "$InstMediaPath\autounattend.xml"
 
 #Create Wifi Profile
-If ($AutocreateWifiProfile){
+If ($AutocreateWifiProfile) {
 	$GUID = (Get-NetAdapter -Name "WLAN").interfaceGUID
 	$path = "C:\ProgramData\Microsoft\Wlansvc\Profiles\Interfaces\$GUID"
 	$Profiles = Get-ChildItem -Path $path 
@@ -517,18 +527,18 @@ If ($AutocreateWifiProfile){
 	}
 	$content = Get-Content "$InstMediaPath\Settings.ps1"
 	$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
-	$content= $content.Replace( $line,"[string]`$Wifi = ""$Name""") 
+	$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
 	Set-Content "$InstMediaPath\Settings.ps1" -Value $content
 }
 
 #Add the $TenantId, $AppId, $AppSecret in the Setting with the values from parameters
 $content = Get-Content "$InstMediaPath\Settings.ps1"
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "TenantId =" | Select-Object -ExpandProperty Line
-$content= $content.Replace( $line,"[string]`$TenantId = ""$TenantID""") 
+$content = $content.Replace( $line, "[string]`$TenantId = ""$TenantID""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppId =" | Select-Object -ExpandProperty Line
-$content= $content.Replace( $line,"[string]`$AppId = ""$AppId""") 
+$content = $content.Replace( $line, "[string]`$AppId = ""$AppId""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppSecret =" | Select-Object -ExpandProperty Line
-$content= $content.Replace( $line,"[string]`$AppSecret = ""$AppSecret""") 
+$content = $content.Replace( $line, "[string]`$AppSecret = ""$AppSecret""") 
 Set-Content "$InstMediaPath\Settings.ps1" -Value $content
 
 
@@ -591,9 +601,11 @@ Switch ($MediaSelection) {
 		}
 		try {
 			Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr" -NoNewWindow -Wait
-		} catch {
+		}
+		catch {
 			Write-Host "An error occurred: $_" -ForegroundColor Red
-		} finally {
+		}
+		finally {
 			Write-Host "Ready!" -ForegroundColor Green
 		}
 	}
