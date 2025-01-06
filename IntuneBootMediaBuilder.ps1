@@ -324,11 +324,16 @@ If (([string]::IsNullOrEmpty($DownloadISO) )) {
 }
 If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 	Write-Host "Downloading installation ISO please be patient!"
+	$startime = Get-Date
 	#Start-BitsTransfer -Source $DownloadISO -Destination "$WorkPath\Installation.iso"
 	$origProgressPreference =$ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
 	Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
 	$ProgressPreference = $origProgressPreference
+	$endtime = Get-Date
+	$time = $endtime - $startime
+	$FileSize = (Get-Item -Path "$WorkPath\Installation.iso").Length
+	Write-Host "It took $($time.Hours)h:$($time.Minutes)m:$($time.Seconds)s to download the $($FileSize/1GB)GB  Image" -ForegroundColor Magenta
 	New-Item "$WorkPath\binschonda.txt"
 }
 
