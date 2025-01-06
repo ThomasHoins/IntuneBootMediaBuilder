@@ -347,11 +347,17 @@ If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 7516192768 -and $MediaS
 ###########################################################
 
 #Get FIDO and download Windows 11 installation ISO
-If (([string]::IsNullOrEmpty($DownloadISO) )) {
+If ([string]::IsNullOrEmpty($DownloadISO) ) {
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
 	#you can only use the script 3 times and then you have to wait 24h, restrictions of the MS web page.
-	If ((Get-Item "$WorkPath\DownloadIso.txt" -ErrorAction SilentlyContinue ).CreationTime -gt (Get-Date).AddHours(-24)){
-		$DownloadISO = Get-Content "$WorkPath\DownloadIso.txt"
+	if  (Test-Path -PathType Leaf "$WorkPath\DownloadIso.txt"){
+		If ((Get-Item "$WorkPath\DownloadIso.txt").CreationTime -gt (Get-Date).AddHours(-24)){
+			$DownloadISO = Get-Content "$WorkPath\DownloadIso.txt"
+		}
+		Else{
+			$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
+			Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
+		}
 	}
 	Else{
 		$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
