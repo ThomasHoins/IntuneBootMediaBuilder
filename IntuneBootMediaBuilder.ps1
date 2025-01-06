@@ -284,7 +284,7 @@ If (([string]::IsNullOrEmpty($WorkPath))) {
 }	
 
 #Add minimal Surfcace Drivers
-If (!(Test-Path -PathType Leaf $WorkPath\Drivers)) {
+If (!(Test-Path -PathType Container $TempFolder\Drivers)) {
 	$origProgressPreference =$ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
 	Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Drivers.zip" -Outfile "$TempFolder\Drivers.zip"
