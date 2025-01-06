@@ -25,7 +25,7 @@ A PowerShell script to create bootable USB media or ISO files with a customized 
       - `DeviceManagementManagedDevices.ReadWrite.All`
       - `DeviceManagementServiceConfig.ReadWrite.All`
     - Grant admin consent for permissions
-- Copy the client ID and Tenant ID and Secret values, and paste to "Settings.ps1" under corresponding variables
+- Copy the client ID and Tenant ID and Secret values, and paste to "Settings.ps1" on the installation media under corresponding variables. 
 
 During the USB media cration a autounattended.xml will be copied to the Installation media. You can use the "https://schneegans.de/windows/unattend-generator" to modify this.
 Make sure that the following entry is added to your script suring the "specialize" phase. Also make sure to modify the "<Order>1</Order>" entry to the appropriate number.
