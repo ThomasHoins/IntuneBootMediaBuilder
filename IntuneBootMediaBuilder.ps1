@@ -380,13 +380,13 @@ public class WinAPI {
 }
 If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 	Write-Host "Downloading installation ISO please be patient!" -ForegroundColor Red
-	$startime = Get-Date
+	$Isostartime = Get-Date
 	$origProgressPreference = $ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
 	Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
 	$ProgressPreference = $origProgressPreference
-	$endtime = Get-Date
-	$time = $endtime - $startime
+	$Isoendtime = Get-Date
+	$time = $Isoendtime - $Isostartime
 	$FileSize = (Get-Item -Path "$WorkPath\Installation.iso").Length
 	Write-Host "It took $($time.Hours)h:$($time.Minutes)m:$($time.Seconds)s to download the $($FileSize/1GB)GB  Image" -ForegroundColor Magenta
 	New-Item "$WorkPath\binschonda.txt"
@@ -599,19 +599,12 @@ Switch ($MediaSelection) {
 			}
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P:" -Wait -NoNewWindow
 		}
-		try {
-			Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr" -NoNewWindow -Wait
-		}
-		catch {
-			Write-Host "An error occurred: $_" -ForegroundColor Red
-		}
-		finally {
-			Write-Host "Ready!" -ForegroundColor Green
-		}
+		Start-Process "$($env:windir)\System32\bootsect.exe" "/nt60 P: /force /mbr" -NoNewWindow -Wait
 	}
 }
 $EndTime = Get-Date
 Write-Host $startTime
 Write-Host $EndTime
-Write-Host $EndTime-$startTime
-
+$time = $EndTime - $startTime
+Write-Host "It Took $($time.Hours)h:$($time.Minutes)m:$($time.Seconds)s to Build this Media" -ForegroundColor Magenta
+Write-Host "We are done!" -ForegroundColor Green
