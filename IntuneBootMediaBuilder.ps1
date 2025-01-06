@@ -437,6 +437,10 @@ Export-WindowsImage -SourceImagePath $InstWimTemp -SourceName $WindowsVersion -D
 Remove-Item $InstWimTemp -Force
 Rename-Item $InstWimDest $InstWimTemp
 
+#Add Installation Files to $InstMediaPath
+Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Start.ps1?token=GHSAT0AAAAAAC42XH5J6GEXIOJBB2MA7FJYZ33SG5A" -Outfile "$InstMediaPath\Start.ps1"
+Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/UploadAutopilotInfo.ps1?token=GHSAT0AAAAAAC42XH5IJSICZNDDF7TF3YPIZ33SITQ" -Outfile "$InstMediaPath\UploadAutopilotInfo.ps1"
+Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml?token=GHSAT0AAAAAAC42XH5JPM4PBGTDYZWRW5PMZ33SLCA" -Outfile "$InstMediaPath\autounattend.xml"
 
 
 ###########################################################
