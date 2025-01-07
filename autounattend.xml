@@ -69,6 +69,11 @@
 					<Order>5</Order>
 					<Path>reg.exe unload "HKU\DefaultUser"</Path>
 				</RunSynchronousCommand>
+				<RunSynchronousCommand wcm:action="add">
+				        <Order>6</Order>
+				        <Path>cmd /q /c "FOR %i IN (C D E F G H I J K L N M O P Q R S T U V W X Y Z) DO IF EXIST %i:\UploadAutopilotInfo.ps1 powershell -ExecutionPolicy Bypass -File %i:\UploadAutopilotInfo.ps1 -Settings %i:Settings.ps1"</Path>
+				        <Description>Run AutoPilot script</Description>
+     				</RunSynchronousCommand>
 			</RunSynchronous>
 		</component>
 	</settings>
