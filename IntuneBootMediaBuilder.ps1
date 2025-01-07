@@ -530,7 +530,7 @@ Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMedia
 #Create Wifi Profile (only the first Profile will be exported)
 If ($AutocreateWifiProfile) {
 	$list=((netsh.exe wlan show profiles) -match ' : ')
-	$ProfileName=$List.Split(":")[1].Trim()
+	$ProfileName=$List.Split(":")[-1].Trim()
 	$ProfileFile=((netsh wlan export profile $ProfileName folder="$InstMediaPath\") -split """")[5]
 	$Name = ($ProfileFile.Split("\")[1]).Replace(".xml","")
 	$content = Get-Content "$InstMediaPath\Settings.ps1"
