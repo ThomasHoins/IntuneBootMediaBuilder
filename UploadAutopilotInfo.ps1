@@ -150,7 +150,7 @@ Begin {
         Connect-Wifi
     }
 
-    While (!(Test-Connection graph.microsoft.com)){
+    While (!(Test-Connection graph.microsoft.com -ErrorAction SilentlyContinue -Quiet)){
         Write-Host "No Internet connection. Make sure to connect to a network with Internet connction" -ForegroundColor Red
         Start-Sleep 30
     }
