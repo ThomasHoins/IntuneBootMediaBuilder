@@ -325,6 +325,8 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	$env:OSCDImgRoot = "$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
 	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
 	$null=Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64, $PEPath -NoNewWindow -Wait -PassThru
+	Copy-Item "$ADKPath\Deployment Tools\amd64\Oscdimg\efisys_noprompt.bin" "$PEPath\fwfiles\efisys.bin" -Force
+	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
 }
 
 # aquire Json Data from tenant
@@ -589,7 +591,7 @@ Switch ($MediaSelection) {
 
         Write-Host "Creating: $ISOFile" -ForegroundColor Cyan
         $data = '2#p0,e,b"{0}"#pEF,e,b"{1}"' -f $etfsboot, $efisys
-        $null = Start-Process $oscdimgCmd -args @("-bootdata:$data",'-udfver102',"-u1","-l$VolName","`"$InstMediaPath`"", "`"$IsoFileName`"") -Wait
+        $null = Start-Process $oscdimgCmd -args @("-bootdata:$data",'-udfver102',"-u1","-l$VolName","`"$InstMediaPath`"", "`"$IsoFileName`"") -Wait -NoNewWindow
 
 
 		# Check the result of the command
