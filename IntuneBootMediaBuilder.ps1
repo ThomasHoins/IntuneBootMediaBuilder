@@ -327,8 +327,20 @@ If (!([string]::IsNullOrEmpty($DownloadISO))) {
 	Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64, $PEPath -NoNewWindow -Wait -PassThru
 }
 
-# aquiere Json Data from tenant
-Connect-MgGraph -TenantId $TenantID -NoWelcome
+# aquire Json Data from tenant
+# If a Logon Profile with sufficient permissin is available we try to log on as application, otherwise we will be asked for credentials
+If (!([string]::IsNullOrEmpty($AppId))-and !([string]::IsNullOrEmpty($AppSecret))) {
+	$SecureClientSecret = ConvertTo-SecureString -String $AppSecret -AsPlainText -Force
+	$ClientSecretCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $AppId, $SecureClientSecret
+	# Connect to Microsoft Graph Using the Tenant ID and Client Secret Credential
+	$null = Connect-MgGraph -TenantId $TenantID -ClientSecretCredential $ClientSecretCredential -NoWelcome
+	}
+
+If (!(Get-MgContext)){
+	$null = Connect-MgGraph 
+	$TenantID = (Get-MgContext).TenantId
+}
+
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 
 #Ask dor media type to build
@@ -369,7 +381,6 @@ If ([string]::IsNullOrEmpty($DownloadISO) ) {
 		Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 	}
 	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
-	$UseFido = $true
 	# Make window visible again
 	Add-Type @"
 using System;
@@ -383,6 +394,8 @@ public class WinAPI {
 	$hwnd = (Get-Process -Id $PID).MainWindowHandle
 	[WinAPI]::ShowWindow($hwnd, 1) | Out-Null
 }
+
+#Download the ISO file if not already present
 If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 	Write-Host "Downloading installation ISO please be patient!" -ForegroundColor Red
 	$Isostartime = Get-Date
@@ -397,13 +410,14 @@ If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 	New-Item "$WorkPath\binschonda.txt"
 }
 
+#Mount the ISO and copy the data to the InstMediaPath folder
 If (Test-Path -PathType Leaf $WorkPath\Installation.iso) {
-	Write-Host "Copying installation data to Temp folder"
 	$InstVol = Mount-DiskImage -ImagePath $WorkPath\Installation.iso | Get-Volume
 	$InstDriveLetter = "$($InstVol.DriveLetter):"
 	$InstMediaPath = "$WorkPath\$($InstVol.FileSystemLabel)"
 	Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue
 	New-Item -ItemType Directory -Path $InstMediaPath
+	Write-Host "Copying installation data to $InstMediaPath please be patient!" -ForegroundColor Red
 	Start-Process "$($env:windir)\System32\Robocopy.exe" "/NP /s /z ""$InstDriveLetter"" ""$InstMediaPath""" -Wait -NoNewWindow
 	Dismount-DiskImage -ImagePath $WorkPath\Installation.iso
 }
@@ -425,14 +439,9 @@ New-Item -ItemType Directory -Path $BootPath
 
 # mount Boot Image
 Write-Host "Mounting Boot Image"
-If ($UseFido) {
-	$BootWimTemp = "$InstMediaPath\sources\Boot.wim"
-	Set-ItemProperty -Path $BootWimTemp -Name IsReadOnly -Value $false
-	Mount-WindowsImage -ImagePath $BootWimTemp -Index:2 -Path $BootPath
-}
-Else {
-	Mount-WindowsImage -ImagePath "$PEPath\media\sources\boot.wim" -Index:1 -Path $BootPath
-}
+$BootWimTemp = "$InstMediaPath\sources\Boot.wim"
+Set-ItemProperty -Path $BootWimTemp -Name IsReadOnly -Value $false
+Mount-WindowsImage -ImagePath $BootWimTemp -Index:2 -Path $BootPath
 
 # Inject Drivers to BootImage
 Write-Host "Adding drivers to Boot Image"
@@ -522,15 +531,12 @@ Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMedia
 If ($AutocreateWifiProfile) {
 	$list=((netsh.exe wlan show profiles) -match ' : ')
 	$ProfileName=$List.Split(":")[1].Trim()
-	$ProfileFile=((netsh wlan export profile $ProfileName folder="$InstMediaPath\") -split """")[4]
+	$ProfileFile=((netsh wlan export profile $ProfileName folder="$InstMediaPath\") -split """")[5]
 	$Name = ($ProfileFile.Split("\")[1]).Replace(".xml","")
 	$content = Get-Content "$InstMediaPath\Settings.ps1"
 	$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
 	$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
 	Set-Content "$InstMediaPath\Settings.ps1" -Value $content
-}
-If ($AutocreateWifiProfile) {
-
 }
 
 #Add the $TenantId, $AppId, $AppSecret in the Setting with the values from parameters
@@ -573,7 +579,7 @@ Switch ($MediaSelection) {
 		
 	}
 	U {
-		$usbDrive = (Get-Disk | Where-Object bustype -eq 'usb')
+		$usbDrive = (Get-Disk | Where-Object Path -like '*usbstor*')
 		$usbDriveNumber = $usbDrive.Number
 		Get-Partition $usbDriveNumber | Remove-Partition
 		If ($MultiParitionUSB) {
