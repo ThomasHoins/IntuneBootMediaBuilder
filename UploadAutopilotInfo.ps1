@@ -151,7 +151,7 @@ Begin {
     }
 
     While (!(Test-Connection graph.microsoft.com)){
-        Write-Host "No Internet Connection. Make sure to connect to a Network with Internet connction" -ForegroundColor Red
+        Write-Host "No Internet connection. Make sure to connect to a network with Internet connction" -ForegroundColor Red
         Start-Sleep 30
     }
 
