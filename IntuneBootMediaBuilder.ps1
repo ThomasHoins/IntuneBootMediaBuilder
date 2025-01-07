@@ -516,7 +516,7 @@ Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMedia
 
 #Create Wifi Profile
 If ($AutocreateWifiProfile) {
-	$GUID = (Get-NetAdapter -Name "WLAN").interfaceGUID
+	<# $GUID = (Get-NetAdapter -Name "WLAN").interfaceGUID
 	$path = "C:\ProgramData\Microsoft\Wlansvc\Profiles\Interfaces\$GUID"
 	$Profiles = Get-ChildItem -Path $path 
 	foreach ($Profile in $Profiles) {
@@ -524,11 +524,18 @@ If ($AutocreateWifiProfile) {
 		$Name = $c.WLANProfile.name
 		Copy-Item $Profile.fullname "$InstMediaPath\$Name.xml"
 		Break #remove if only the first profile does not work
-	}
+	} #> #This did not work, as the created Profile did not work under windows 11
+	$list=((netsh.exe wlan show profiles) -match ' : ')
+	$ProfileName=$List.Split(":")[1].Trim()
+	$ProfileFile=((netsh wlan export profile $ProfileName folder="$InstMediaPath\") -split """")[4]
+	$Name = ($ProfileFile.Split("\")[1]).Replace(".xml","")
 	$content = Get-Content "$InstMediaPath\Settings.ps1"
 	$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
 	$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
 	Set-Content "$InstMediaPath\Settings.ps1" -Value $content
+}
+If ($AutocreateWifiProfile) {
+
 }
 
 #Add the $TenantId, $AppId, $AppSecret in the Setting with the values from parameters
