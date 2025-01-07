@@ -3,10 +3,12 @@
 	Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
 
 .DESCRIPTION
-	This script creates a bootable Windows PE image by downloading, installing, and configuring the Windows ADK. 
+	This script creates a Intune installation media by downloading original installation sources from Microsoft an injecting configuration files to 
+    create a fully unattended Autopilot installation.
 	It integrates drivers and components and adds a custom startup script that runs when the PE boots. 
 	The final image can be saved as an ISO file or written directly to a USB stick. It is designed specifically for Intune Autopilot deployments.
-	You can create a "binschonda.txt" file in one of your Working Directories (The ones with DATE-RND name)
+	A "binschonda.txt" file will be created in your Working Directory (The ones with DATE-RND name). if you want multiple Environments, remove that file.
+    At the moment Hyper-V VMs with Windwos 11 will not work if you have TPM enabled and did not enable the workarround for incompatibilitys in the autounattend.xml
 
 	- The script requires administrative privileges.
 	- A USB stick with at least 8 GB of storage is required.
