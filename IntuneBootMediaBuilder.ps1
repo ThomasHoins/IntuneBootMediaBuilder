@@ -515,15 +515,6 @@ Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMedia
 
 #Create Wifi Profile
 If ($AutocreateWifiProfile) {
-	<# $GUID = (Get-NetAdapter -Name "WLAN").interfaceGUID
-	$path = "C:\ProgramData\Microsoft\Wlansvc\Profiles\Interfaces\$GUID"
-	$Profiles = Get-ChildItem -Path $path 
-	foreach ($Profile in $Profiles) {
-		[xml]$c = Get-Content -path $Profile.fullname
-		$Name = $c.WLANProfile.name
-		Copy-Item $Profile.fullname "$InstMediaPath\$Name.xml"
-		Break #remove if only the first profile does not work
-	} #> #This did not work, as the created Profile did not work under windows 11
 	$list=((netsh.exe wlan show profiles) -match ' : ')
 	$ProfileName=$List.Split(":")[1].Trim()
 	$ProfileFile=((netsh wlan export profile $ProfileName folder="$InstMediaPath\") -split """")[4]
