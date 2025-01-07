@@ -55,12 +55,27 @@ Make sure that the following entry is added to your script suring the "specializ
 |--------------------|---------------------------------------------------------------------------------------------|--------------------------|
 | `PEPath`          | Specifies the path where the WinPE files will be cached.                                    | N/A                      |
 | `IsoPath`         | Specifies the target path for the ISO file.                                                 | Working directory        |
+| `MultiParitionUSB`| Possibility to create a multi partition USB installation media for large Images             | `$false`        |
 | `TempFolder`      | Specifies the temporary folder path.                                                        | `C:\Temp`                |
 | `OutputFolder`    | Specifies the output folder for the final media.                                            | N/A                      |
 | `StartScriptSource` | Specifies the URL of the PowerShell startup script to be executed by the WinPE.           | Provided URL             |
 | `DriverFolder`    | Specifies the folder containing drivers to be injected into the WinPE image.                | `C:\Temp\Drivers`        |
 | `ADKPath`         | Specifies the installation path of the Windows ADK.                                         | `C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit` |
 | `ADKVersion`      | Specifies the version of the Windows ADK to be used.                                        | `10.1.22621.1`           |
+| `WindowsEdition`  | The edition of Windows to be downloaded (e.g., Windows 11 Home/Pro/Edu).                    | `Windows 11 Home/Pro/Edu`|
+| `WindowsVersion`  | The Version of Windows to be selected during installation (e.g., Windows 11 Pro).           | `Windows 11 Pro`         |
+| `InstallLanguage` | The language of the Windows installation (e.g., English)                                    | `English`                |
+| `Locale`          | The Locale of the Windows installation (e.g., en-US)                                        | `en-US`                  |
+| `DownloadISO`     | The URL to download the Windows installation ISO.                                           | N/A                      |
+| `AutocreateWifiProfile`| If you want the Wifi Profile to be autocreated, based on your 1st Wifi Profile         | `$true`                  |
+| `MediaSelection`  | The type of media to create (e.g., 'I' for ISO, 'U' for USB Stick).                         | N/A                      |
+| `AutounattendFile`| The path to the autounattend.xml file to be integrated. (don't use together withAutocreateWifiProfile)| N/A            |
+| `AppId`           | The AppID you created to log in into Intune                                                 | N/A                      |
+| `TenantID`        | The ID of your O365 Tenant                                                                  | N/A                      |
+| `AppSecret`       | The AppSecret you created to log in into Intune                                             | N/A                      |
+| `ProfileID`       | The ProfileID you created to log in into Intune                                             | N/A                      |
+
+
 
 ## Usage
 
