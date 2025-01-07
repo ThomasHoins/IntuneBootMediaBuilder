@@ -57,6 +57,7 @@ There is an excellent online generator for that file.
 
 .PARAMETER ADKPath
 Specifies the installation path of the Windows ADK. If the ADK is not installed, it will be downloaded and installed automatically.
+The ADK will only be used if an ISO file is created or if you select a custom install image with the `-DownloadISO` parameter.
 
 .PARAMETER ADKVersion
 Specifies the version of the Windows ADK to be installed. The default is `10.1.22621.1`. This version should match the version of the installed operating system.
@@ -281,12 +282,6 @@ If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Ad
 	Exit
 }
 
-If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
-	Write-Host "No ADK has been found, installing it!"
-	winget install Microsoft.WindowsADK --version $ADKVersion
-	winget install Microsoft.ADKPEAddon --version $ADKVersion
-}
-
 Clear-Path
 
 #create Path environment create new workdir if "binschonda.txt" does not exist
@@ -323,12 +318,14 @@ $InstWimPath = "$WorkPath\mount\InstWim"
 $PackageTemp = "$WorkPath\mount\PackageTemp"
 
 # prepare PE data
-$env:DandIRoot = "$ADKPath\Deployment Tools"
-$env:WinPERoot = "$ADKPath\Windows Preinstallation Environment"
-$env:WinPERootNoArch = "$ADKPath\Windows Preinstallation Environment"
-$env:OSCDImgRoot = "$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
-Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
-Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64, $PEPath -NoNewWindow -Wait -PassThru
+If (!([string]::IsNullOrEmpty($DownloadISO))) {
+	$env:DandIRoot = "$ADKPath\Deployment Tools"
+	$env:WinPERoot = "$ADKPath\Windows Preinstallation Environment"
+	$env:WinPERootNoArch = "$ADKPath\Windows Preinstallation Environment"
+	$env:OSCDImgRoot = "$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
+	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
+	Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64, $PEPath -NoNewWindow -Wait -PassThru
+}
 
 # aquiere Json Data from tenant
 Connect-MgGraph -TenantId $TenantID -NoWelcome
@@ -340,7 +337,15 @@ $MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]
 If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 7516192768 -and $MediaSelection -eq "U") {
 	Write-Host "This USB stick is too small!"
 	Exit
-}  
+} 
+
+If (!([string]::IsNullOrEmpty($DownloadISO))-and $MediaSelection -eq "I") {
+	If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
+		Write-Host "No ADK has been found, installing it!"
+		winget install Microsoft.WindowsADK --version $ADKVersion
+		winget install Microsoft.ADKPEAddon --version $ADKVersion
+	}
+}
 
 ###########################################################
 #	Downloading Installation Media
