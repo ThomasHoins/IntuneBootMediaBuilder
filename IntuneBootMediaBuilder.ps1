@@ -149,11 +149,11 @@ function Clear-Path {
 	# Clean Up
 	Write-Host "Cleaning up files"
 	Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
-	#Disconnect-MgGraph
-	If ($PEPath) { Remove-Item $PEPath -Recurse -Force }
-	If ($BootPath) { Remove-Item $BootPath -Recurse -Force }
-	If ($InstMediaPath) { Remove-Item $InstMediaPath -Recurse -Force }
-	If ($InstWimTemp) { Remove-Item $InstWimTemp -Recurse -Force }
+	Disconnect-MgGraph
+	If ($PEPath) { Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue}
+	If ($BootPath) { Remove-Item $BootPath -Recurse -Force -ErrorAction SilentlyContinue}
+	If ($InstMediaPath) { Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue}
+	If ($InstWimTemp) { Remove-Item $InstWimTemp -Recurse -Force -ErrorAction SilentlyContinue}
 }
 
 function Get-IntuneJson() {
