@@ -318,13 +318,13 @@ $InstWimPath = "$WorkPath\mount\InstWim"
 $PackageTemp = "$WorkPath\mount\PackageTemp"
 
 # prepare PE data
-If (!([string]::IsNullOrEmpty($DownloadISO))) {
+If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	$env:DandIRoot = "$ADKPath\Deployment Tools"
 	$env:WinPERoot = "$ADKPath\Windows Preinstallation Environment"
 	$env:WinPERootNoArch = "$ADKPath\Windows Preinstallation Environment"
 	$env:OSCDImgRoot = "$env:DandIRoot\$($env:PROCESSOR_ARCHITECTURE)\Oscdimg"
 	Remove-Item $PEPath -Recurse -Force -ErrorAction SilentlyContinue
-	Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64, $PEPath -NoNewWindow -Wait -PassThru
+	$null=Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64, $PEPath -NoNewWindow -Wait -PassThru
 }
 
 # aquire Json Data from tenant
@@ -414,7 +414,8 @@ If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 If (Test-Path -PathType Leaf $WorkPath\Installation.iso) {
 	$InstVol = Mount-DiskImage -ImagePath $WorkPath\Installation.iso | Get-Volume
 	$InstDriveLetter = "$($InstVol.DriveLetter):"
-	$InstMediaPath = "$WorkPath\$($InstVol.FileSystemLabel)"
+	$VolName = $InstVol.FileSystemLabel
+	$InstMediaPath = "$WorkPath\$VolName"
 	Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue
 	New-Item -ItemType Directory -Path $InstMediaPath
 	Write-Host "Copying installation data to $InstMediaPath please be patient!" -ForegroundColor Red
@@ -530,13 +531,18 @@ Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMedia
 #Create Wifi Profile (only the first Profile will be exported)
 If ($AutocreateWifiProfile) {
 	$list=((netsh.exe wlan show profiles) -match ' : ')
-	$ProfileName=$List.Split(":")[-1].Trim()
-	$ProfileFile=((netsh wlan export profile $ProfileName folder="$InstMediaPath\") -split """")[5]
-	$Name = ($ProfileFile.Split("\")[1]).Replace(".xml","")
-	$content = Get-Content "$InstMediaPath\Settings.ps1"
-	$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
-	$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
-	Set-Content "$InstMediaPath\Settings.ps1" -Value $content
+	If($List.Count -ne 0) {
+		$ProfileName=$List.Split(":")[1].Trim()
+		$ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMediaPath\") -split """")[5]
+		$Name = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
+		$content = Get-Content "$InstMediaPath\Settings.ps1"
+		$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
+		$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
+		Set-Content "$InstMediaPath\Settings.ps1" -Value $content
+	}
+	else {
+		Write-Host "No Wifi Profile found!" -ForegroundColor Yellow
+	}
 }
 
 #Add the $TenantId, $AppId, $AppSecret in the Setting with the values from parameters
@@ -558,23 +564,41 @@ Set-Content "$InstMediaPath\Settings.ps1" -Value $content
 copy-item $AutounattendFile "$InstMediaPath" -Force
 Switch ($MediaSelection) {
 	I {
-		# Check if the Destination file exists
-		if ((Test-Path $IsoPath)) {
+		#"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe" -bootdata:2#p0,e,b"$PEPath\fwfiles\etfsboot.com"#pEF,e,b"$PEPath\fwfiles\efisys.bin" -u1 -udfver102 "$InstMediaPath" "$IsoFileName"
+		#"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe" -bootdata:2#p0,e,b"$PEPath\fwfiles\etfsboot.com"#pEF,e,b"$PEPath\fwfiles\efisys.bin" -u1 -udfver102 "$InstMediaPath" "$IsoFileName"
+		# Test if all required files are there and create an Installation ISO
+		if (!(Test-Path $IsoPath)) {
 			New-Item -ItemType Directory -Path $IsoPath
 		}
-		
+        $oscdimgCmd = "$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe"
+        if (!(Test-Path $oscdimgCmd)) {
+            Write-Host "Could not locate $oscdimgCmd" -ForegroundColor Red
+        }
 		$IsoFileName = "$IsoPath\IntuneBootMedia.iso"
-		# Create the ISO file using the appropriate OSCDImg command
-		Write-Host "Creating $IsoFileName..."
-		$oscdString = "2#p0,e,b`"$PEPath\fwfiles\etfsboot.com`"#pEF,e,b`"$PEPath\fwfiles\efisys.bin`""
-		$oscdimgCmd = "`"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe`" -bootdata:$oscdString -u1 -udfver102 `"$InstMediaPath`" `"$IsoFileName`""
-		$OSCDResult = Invoke-Expression $oscdimgCmd -PassThru
+        if (!(Test-Path $InstMediaPath)) {
+            Write-Host "Could not locate $ISOSourceFolder" -ForegroundColor Red
+        }
+        $etfsboot = "$PEPath\fwfiles\etfsboot.com"
+        if (!(Test-Path $etfsboot)) {
+            Write-Host "Could not locate $etfsboot" -ForegroundColor Red
+        }
+        $efisys = "$PEPath\fwfiles\efisys.bin"
+        if (!(Test-Path $efisys)) {
+            Write-Host "Could not locate $efisys" -ForegroundColor Red
+        }
+
+        Write-Host "Creating: $ISOFile" -ForegroundColor Cyan
+        $data = '2#p0,e,b"{0}"#pEF,e,b"{1}"' -f $etfsboot, $efisys
+        $null = Start-Process $oscdimgCmd -args @("-bootdata:$data",'-udfver102',"-u1","-l$VolName","`"$InstMediaPath`"", "`"$IsoFileName`"") -Wait
+
 
 		# Check the result of the command
-		if ($OSCDResult -ne 0) {
+		if ((Test-Path $IsoFileName)) {
+			Write-Host "The installation iso has been created succesfully and can be found here: $IsoPath " -ForegroundColor Green
+		}
+		Else{
 			Write-Host "ERROR: Failed to create $IsoPath file." -ForegroundColor Red
 			Clear-Path
-			exit 1
 		}
 		
 	}
