@@ -16,11 +16,11 @@
 
 .NOTES
 
-	Version:		0.1
+	Version:		1.0
 	Author: 		Thomas Hoins 
 					Datagroup OIT
  	initial Date:	10.12.2024
- 	Changes: 		12.12. 2024	Minor changes
+ 	Changes: 		07.01.2025 first fully functional version
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
