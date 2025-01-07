@@ -38,8 +38,8 @@ Make sure that the following entry is added to your script suring the "specializ
 <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <RunSynchronous>
       <RunSynchronousCommand wcm:action="add">
-        <Order>1</Order>
-        <Path>cmd /q /c "FOR %i IN (C D E F G H I J K L N M O P Q R S T U V W X Y Z) DO IF EXIST %i:\WindowsAutoPilotInfo.ps1 powershell -ExecutionPolicy Bypass -File %i:\WindowsAutoPilotInfo.ps1 -Settings %i:Settings.ps1"</Path>
+        <Order>10</Order>
+        <Path>cmd /q /c "FOR %i IN (C D E F G H I J K L N M O P Q R S T U V W X Y Z) DO IF EXIST %i:\UploadAutopilotInfo.ps1 powershell -ExecutionPolicy Bypass -File %i:\UploadAutopilotInfo.ps1 -Settings %i:Settings.ps1"</Path>
         <Description>Run AutoPilot script</Description>
       </RunSynchronousCommand>
     </RunSynchronous>
