@@ -302,7 +302,7 @@ If (([string]::IsNullOrEmpty($WorkPath))) {
 	New-Item -ItemType Directory -Path $WorkPath
 }	
 
-#Add minimal Surfcace Drivers
+#Add minimal Drivers from Repository
 If (!(Test-Path -PathType Container $TempFolder\Drivers)) {
 	$origProgressPreference = $ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
@@ -477,7 +477,6 @@ Add-Content -Path "$BootPath\Windows\System32\startnet.cmd" -Value $startnetText
 
 # Unmount Boot Image
 Dismount-WindowsImage -Path $BootPath -Save
-#Get-WindowsImage -Mounted | Dismount-WindowsImage -Discard -ErrorAction SilentlyContinue
 
 ###########################################################
 #	Prepareing Install Image
