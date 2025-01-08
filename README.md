@@ -82,7 +82,7 @@ Make sure that the following entry is added to your script suring the "specializ
 ### Example 1: Create an ISO file
 ```powershell
 .\IntuneBootMediaBuilder.ps1 -PEPath "C:\WinPE" -IsoPath "C:\Output\BootImage.iso" -DriverFolder "C:\Drivers"
-
+```
 
 ## A collection of useful links:
 
