@@ -26,7 +26,7 @@
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
 
 .COMPONENT
-	Requires Modules Microsoft.Graph.Authentication
+	Requires Modules Microsoft.Graph.Authentication, Az.Accounts
 
 .PARAMETER PEPath
 Specifies the path where the PE files will be cached.
@@ -119,6 +119,7 @@ Creates a PE image using a specified ADK version.
 #>
 
 #Requires -Modules Microsoft.Graph.Authentication
+#Requires -Modules Az.Accounts
 
 Param (
 	[string]$PEPath,
@@ -138,8 +139,8 @@ Param (
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion = "10.1.22621.1",
 	[string]$TenantID = "22c3b957-8768-4139-8b5e-279747e3ecbf",
-	[string]$AppId = "31f7ef0c-9662-4522-bb32-f1b8c2d5a7c3",
-	[string]$AppSecret = "b_u8Q~kVtK6Es0BAmtvB~wq4pvfWoY1vVUGnTahX",
+	[string]$AppId = "db2f560e-b09f-4619-973a-a40cdc0b512d",
+	[string]$AppSecret = "Np48Q~_WHBPVvqNit9hVx9KXEv~DQyvR1CoW5a-A",
 	[string]$ProfileID = "41b669f0-86d4-4363-b666-5046469d0611"
 )	
 
@@ -156,6 +157,106 @@ function Clear-Path {
 	If ($BootPath) { Remove-Item $BootPath -Recurse -Force -ErrorAction SilentlyContinue}
 	If ($InstMediaPath) { Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue}
 	If ($InstWimTemp) { Remove-Item $InstWimTemp -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
+function New-Appregistration {
+# maybe rebuild this part to use the MS Graph API
+	update-azconfig -EnableLoginByWam $false
+	Connect-AzAccount
+
+	$TenantID = (Get-AzContext).Tenant.Id
+
+	Add-Type -AssemblyName System.Windows.Forms
+	Add-Type -AssemblyName System.Drawing
+
+	$Applications = Get-AzADApplication | Select DisplayName , AppID
+	$AppID = $Applications[0].AppID
+	If ($Applications.count -gt 1) {
+		$SelectApplication = $true
+	}
+	ElseIf ($Applications[0].DisplayName -contains "Intune" -or $Applications[0].DisplayName -contains "Autopilot") {
+		$SelectApplication = $false
+	}
+	Else { $SelectApplication = $true } 
+
+	If ($SelectApplication) {
+
+		$form = New-Object System.Windows.Forms.Form
+		$form.Text = 'Select Application'
+		$form.Size = New-Object System.Drawing.Size(400, 200)
+		$form.StartPosition = 'CenterScreen'
+		$okButton = New-Object System.Windows.Forms.Button
+		$okButton.Location = New-Object System.Drawing.Point(10, 120)
+		$okButton.Size = New-Object System.Drawing.Size(75, 23)
+		$okButton.Text = 'OK'
+		$okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+
+		$form.AcceptButton = $okButton
+		$form.Controls.Add($okButton)
+
+		$newButton = New-Object System.Windows.Forms.Button
+		$newButton.Location = New-Object System.Drawing.Point(295, 120)
+		$newButton.Size = New-Object System.Drawing.Size(75, 23)
+		$newButton.Text = 'New'
+		$newButton.DialogResult = [System.Windows.Forms.DialogResult]::Abort
+
+		$form.AcceptButton = $newButton
+		$form.Controls.Add($newButton)
+
+
+
+		$label = New-Object System.Windows.Forms.Label
+		$label.Location = New-Object System.Drawing.Point(10, 20)
+		$label.Size = New-Object System.Drawing.Size(380, 60)
+		$label.Text = @'
+Multiple Applications found. Select which Application to use.
+If you want to create a new Application,press New.
+'@
+		$form.Controls.Add($label)
+
+		$comboBox = New-Object System.Windows.Forms.ComboBox
+		$comboBox.Location = New-Object System.Drawing.Point(10, 80)
+		$comboBox.Size = New-Object System.Drawing.Size(360, 20)
+		ForEach ($Item in $Applications) {
+			[void] $comboBox.Items.Add("$($Item.DisplayName) ($($Item.AppId))")
+		}
+		$comboBox.SelectedIndex = 0
+		$form.Controls.Add($comboBox)
+		[void] $form.ShowDialog()
+		If ($form.DialogResult -eq "OK") {
+			$AppID = $Applications[$comboBox.SelectedIndex].AppID
+		}
+		Else {
+			$AppID = "New"
+		}
+	}
+	#Create a new App
+	If ($AppID -eq "New") {
+		$App = New-AzADApplication -Displayname "Intune App Registration (Custom)"
+		$AppID = $App.AppId
+		#Add the MS Graph API permission for "Directory.ReadWrite.All" of type 'Application'
+		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 19dbc75e-c2e2-444c-a770-ec69d8559fc7 -ApplicationID $AppId -Type Role
+		#Add the MS Graph API permission for "GroupMember.ReadWrite.All" of type 'Application'
+		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId dbaae8cf-10b5-4b86-a4a1-f871c94c6695 -ApplicationID $AppId -Type Role
+
+		#Add the MS Graph API permission for "DeviceManagementConfiguration.ReadWrite.All" of type 'Application'
+		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 9241abd9-d0e6-425a-bd4f-47ba86e767a4 -ApplicationID $AppId -Type Role
+		#Add the MS Graph API permission for "DeviceManagementManagedDevices.ReadWrite.All" of type 'Application'
+		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 243333ab-4d21-40cb-a475-36241daa0842 -ApplicationID $AppId -Type Role
+		#Add the MS Graph API permission for "DeviceManagementServiceConfig.ReadWrite.All" of type 'Application'
+		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 5ac13192-7ace-4fcf-b828-1a26f28068ee -ApplicationID $AppId -Type Role
+
+		$secretStartDate = Get-Date
+		$secretEndDate = $secretStartDate.AddYears(1)
+		$webApiSecret = New-AzADAppCredential -StartDate $secretStartDate -EndDate $secretEndDate -ApplicationId $App.AppId
+		Write-Output $webApiSecret
+		$AppSecret = $webApiSecret.SecretText
+
+		While (!(Get-AzADAppCredential -ApplicationId $App.AppId).KeyId) {
+			Start-Sleep 10
+		} 
+
+	}
 }
 
 function Get-IntuneJson() {
@@ -330,6 +431,11 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	$null=Start-Process -FilePath "$ADKPath\Windows Preinstallation Environment\copype.cmd" -ArgumentList amd64, $PEPath -NoNewWindow -Wait -PassThru
 	Copy-Item "$ADKPath\Deployment Tools\amd64\Oscdimg\efisys_noprompt.bin" "$PEPath\fwfiles\efisys.bin" -Force
 	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
+}
+
+# Check if TenantID is available if not, create a new App Registration
+If ([string]::IsNullOrEmpty($TenantID)) {
+	$null = New-Appregistration
 }
 
 # aquire Json Data from tenant
