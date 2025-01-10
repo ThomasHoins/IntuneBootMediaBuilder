@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
 	Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
 
@@ -277,6 +277,7 @@ function Get-IntuneJson() {
 ###########################################################
 #	Main
 ###########################################################
+
 $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))) {
@@ -348,9 +349,12 @@ If (!(Get-MgContext)){
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 
 #Ask dor media type to build
-$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
+do {
+	$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
+} while ($MediaSelection -notin @('I', 'U'))
 
-If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 7516192768 -and $MediaSelection -eq "U") {
+$usbDrive = Get-Disk | Where-Object BusType -eq 'USB' | Select-Object -First 1
+If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 	Write-Host "This USB stick is too small!"
 	Exit
 } 
