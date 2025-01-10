@@ -169,7 +169,7 @@ function New-Appregistration {
 	Add-Type -AssemblyName System.Windows.Forms
 	Add-Type -AssemblyName System.Drawing
 
-	$Applications = Get-AzADApplication | Select DisplayName , AppID
+	$Applications = Get-AzADApplication | Select-Object DisplayName , AppID
 	$AppID = $Applications[0].AppID
 	If ($Applications.count -gt 1) {
 		$SelectApplication = $true
