@@ -164,13 +164,13 @@ function New-Appregistration {
 	update-azconfig -EnableLoginByWam $false
 	Connect-AzAccount
 
-	$TenantID = (Get-AzContext).Tenant.Id
+	$script:TenantID = (Get-AzContext).Tenant.Id
 
 	Add-Type -AssemblyName System.Windows.Forms
 	Add-Type -AssemblyName System.Drawing
 
 	$Applications = Get-AzADApplication | Select-Object DisplayName , AppID
-	$AppID = $Applications[0].AppID
+	$script:AppID = $Applications[0].AppID
 	If ($Applications.count -gt 1) {
 		$SelectApplication = $true
 	}
@@ -250,13 +250,23 @@ If you want to create a new Application,press New.
 		$secretEndDate = $secretStartDate.AddYears(1)
 		$webApiSecret = New-AzADAppCredential -StartDate $secretStartDate -EndDate $secretEndDate -ApplicationId $App.AppId
 		Write-Output $webApiSecret
-		$AppSecret = $webApiSecret.SecretText
+		$script:AppSecret = $webApiSecret.SecretText
 
 		While (!(Get-AzADAppCredential -ApplicationId $App.AppId).KeyId) {
 			Start-Sleep 10
 		} 
-
 	}
+	#Update Script with gatered information
+	$IBMBFile= $MyInvocation.ScriptName
+	$content = Get-Content $IBMBFile
+	$line = $content | Select-String "TenantID =" | Select-Object -ExpandProperty Line
+	$content = $content.Replace( $line, "[string]`$TenantID = ""$TenantID""") 
+	$line = $content | Select-String "AppID =" | Select-Object -ExpandProperty Line
+	$content = $content.Replace( $line, "[string]`$AppID = ""$AppID""") 
+	$line = $content | Select-String "AppSecret =" | Select-Object -ExpandProperty Line
+	$content = $content.Replace( $line, "[string]`$AppSecret = ""$AppSecret""") 
+	Set-Content "$IBMBFile" -Value $content
+
 }
 
 function Get-IntuneJson() {
