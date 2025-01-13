@@ -138,10 +138,10 @@ Param (
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion = "10.1.22621.1",
-	[string]$TenantID = "22c3b957-8768-4139-8b5e-279747e3ecbf",
-	[string]$AppId = "db2f560e-b09f-4619-973a-a40cdc0b512d",
-	[string]$AppSecret = "Np48Q~_WHBPVvqNit9hVx9KXEv~DQyvR1CoW5a-A",
-	[string]$ProfileID = "41b669f0-86d4-4363-b666-5046469d0611"
+	[string]$TenantID = "",
+	[string]$AppId = "",
+	[string]$AppSecret = "",
+	[string]$ProfileID = ""
 )	
 
 ###########################################################
