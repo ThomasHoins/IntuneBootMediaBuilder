@@ -16,11 +16,12 @@
 
 .NOTES
 
-	Version:		1.0
+	Version:		1.1
 	Author: 		Thomas Hoins 
 					Datagroup OIT
  	initial Date:	10.12.2024
  	Changes: 		07.01.2025 first fully functional version
+	Changes: 		13.01.2025 Added the possibility to create a new App Registration if no TenantID is available
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
