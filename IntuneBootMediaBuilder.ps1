@@ -16,12 +16,11 @@
 
 .NOTES
 
-	Version:		1.1
+	Version:		1.0
 	Author: 		Thomas Hoins 
 					Datagroup OIT
  	initial Date:	10.12.2024
  	Changes: 		07.01.2025 first fully functional version
-	Changes: 		13.01.2025 Added the possibility to create a new App Registration if no TenantID is available
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
@@ -117,10 +116,10 @@ PS> .\IntuneBootMediaBuilder.ps1 -PEPath "C:\WinPE" -DriverFolder "C:\Drivers" -
 
 Creates a PE image using a specified ADK version.
 
+#Requires -Modules Microsoft.Graph.Authentication, Microsoft.Graph.Applications, Az.Accounts
+
 #>
 
-#Requires -Modules Microsoft.Graph.Authentication
-#Requires -Modules Az.Accounts
 
 Param (
 	[string]$PEPath,
@@ -162,16 +161,22 @@ function Clear-Path {
 
 function New-Appregistration {
 # maybe rebuild this part to use the MS Graph API
-	update-azconfig -EnableLoginByWam $false
-	Connect-AzAccount
 
-	$script:TenantID = (Get-AzContext).Tenant.Id
+	#update-azconfig -EnableLoginByWam $false
+	#Connect-AzAccount
+    Connect-MgGraph
+
+
+	#$script:TenantID = (Get-AzContext).Tenant.Id
+    $script:TenantID = (Get-MgContext).TenantId
 
 	Add-Type -AssemblyName System.Windows.Forms
 	Add-Type -AssemblyName System.Drawing
 
-	$Applications = Get-AzADApplication | Select-Object DisplayName , AppID
-	$script:AppID = $Applications[0].AppID
+	#$Applications = Get-AzADApplication | Select-Object DisplayName , AppID
+    $Applications = Get-MgApplication | Select-Object DisplayName , AppId
+	
+    $script:AppID = $Applications[0].AppID
 	If ($Applications.count -gt 1) {
 		$SelectApplication = $true
 	}
@@ -233,7 +238,8 @@ If you want to create a new Application,press New.
 	}
 	#Create a new App
 	If ($AppID -eq "New") {
-		$App = New-AzADApplication -Displayname "Intune App Registration (Custom)"
+		#$App = New-AzADApplication -Displayname "Intune App Registration (Custom)"
+        $App = New-MgApplication
 		$AppID = $App.AppId
 		#Add the MS Graph API permission for "Directory.ReadWrite.All" of type 'Application'
 		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 19dbc75e-c2e2-444c-a770-ec69d8559fc7 -ApplicationID $AppId -Type Role
@@ -390,6 +396,17 @@ function Get-IntuneJson() {
 #	Main
 ###########################################################
 
+$RequiredModules = ("Microsoft.Graph.Authentication", "Microsoft.Graph.Applications", "Az.Accounts")
+
+$Modules = (Get-Module).Name
+ForEach($Module In $RequiredModules){
+    If ($Module -notin $Modules){
+    Write-Host "Installing required Module $Module."
+    Install-Module $Module -Force
+    }
+}
+
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))) {
