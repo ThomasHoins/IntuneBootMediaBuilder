@@ -159,115 +159,7 @@ function Clear-Path {
 	If ($InstMediaPath) { Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue}
 	If ($InstWimTemp) { Remove-Item $InstWimTemp -Recurse -Force -ErrorAction SilentlyContinue}
 }
-function New-Appregistration {
-# maybe rebuild this part to use the MS Graph API
-	update-azconfig -EnableLoginByWam $false
-	Connect-AzAccount
 
-	$script:TenantID = (Get-AzContext).Tenant.Id
-
-	Add-Type -AssemblyName System.Windows.Forms
-	Add-Type -AssemblyName System.Drawing
-
-	$Applications = Get-AzADApplication | Select-Object DisplayName , AppID
-	$script:AppID = $Applications[0].AppID
-	If ($Applications.count -gt 1) {
-		$SelectApplication = $true
-	}
-	ElseIf ($Applications[0].DisplayName -contains "Intune" -or $Applications[0].DisplayName -contains "Autopilot") {
-		$SelectApplication = $false
-	}
-	Else { $SelectApplication = $true } 
-
-	If ($SelectApplication) {
-
-		$form = New-Object System.Windows.Forms.Form
-		$form.Text = 'Select Application'
-		$form.Size = New-Object System.Drawing.Size(400, 200)
-		$form.StartPosition = 'CenterScreen'
-		$okButton = New-Object System.Windows.Forms.Button
-		$okButton.Location = New-Object System.Drawing.Point(10, 120)
-		$okButton.Size = New-Object System.Drawing.Size(75, 23)
-		$okButton.Text = 'OK'
-		$okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-
-		$form.AcceptButton = $okButton
-		$form.Controls.Add($okButton)
-
-		$newButton = New-Object System.Windows.Forms.Button
-		$newButton.Location = New-Object System.Drawing.Point(295, 120)
-		$newButton.Size = New-Object System.Drawing.Size(75, 23)
-		$newButton.Text = 'New'
-		$newButton.DialogResult = [System.Windows.Forms.DialogResult]::Abort
-
-		$form.AcceptButton = $newButton
-		$form.Controls.Add($newButton)
-
-
-
-		$label = New-Object System.Windows.Forms.Label
-		$label.Location = New-Object System.Drawing.Point(10, 20)
-		$label.Size = New-Object System.Drawing.Size(380, 60)
-		$label.Text = @'
-Multiple Applications found. Select which Application to use.
-If you want to create a new Application,press New.
-'@
-		$form.Controls.Add($label)
-
-		$comboBox = New-Object System.Windows.Forms.ComboBox
-		$comboBox.Location = New-Object System.Drawing.Point(10, 80)
-		$comboBox.Size = New-Object System.Drawing.Size(360, 20)
-		ForEach ($Item in $Applications) {
-			[void] $comboBox.Items.Add("$($Item.DisplayName) ($($Item.AppId))")
-		}
-		$comboBox.SelectedIndex = 0
-		$form.Controls.Add($comboBox)
-		[void] $form.ShowDialog()
-		If ($form.DialogResult -eq "OK") {
-			$AppID = $Applications[$comboBox.SelectedIndex].AppID
-		}
-		Else {
-			$AppID = "New"
-		}
-	}
-	#Create a new App
-	If ($AppID -eq "New") {
-		$App = New-AzADApplication -Displayname "Intune App Registration (Custom)"
-		$AppID = $App.AppId
-		#Add the MS Graph API permission for "Directory.ReadWrite.All" of type 'Application'
-		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 19dbc75e-c2e2-444c-a770-ec69d8559fc7 -ApplicationID $AppId -Type Role
-		#Add the MS Graph API permission for "GroupMember.ReadWrite.All" of type 'Application'
-		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId dbaae8cf-10b5-4b86-a4a1-f871c94c6695 -ApplicationID $AppId -Type Role
-
-		#Add the MS Graph API permission for "DeviceManagementConfiguration.ReadWrite.All" of type 'Application'
-		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 9241abd9-d0e6-425a-bd4f-47ba86e767a4 -ApplicationID $AppId -Type Role
-		#Add the MS Graph API permission for "DeviceManagementManagedDevices.ReadWrite.All" of type 'Application'
-		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 243333ab-4d21-40cb-a475-36241daa0842 -ApplicationID $AppId -Type Role
-		#Add the MS Graph API permission for "DeviceManagementServiceConfig.ReadWrite.All" of type 'Application'
-		Add-AzADAppPermission -ApiId 00000003-0000-0000-c000-000000000000 -PermissionId 5ac13192-7ace-4fcf-b828-1a26f28068ee -ApplicationID $AppId -Type Role
-
-		$secretStartDate = Get-Date
-		$secretEndDate = $secretStartDate.AddYears(1)
-		$webApiSecret = New-AzADAppCredential -StartDate $secretStartDate -EndDate $secretEndDate -ApplicationId $App.AppId
-		Write-Output $webApiSecret
-		$script:AppSecret = $webApiSecret.SecretText
-
-		While (!(Get-AzADAppCredential -ApplicationId $App.AppId).KeyId) {
-			Start-Sleep 10
-		} 
-	}
-	#Update Script with gatered information
-	$IBMBFile= $MyInvocation.ScriptName
-	$content = Get-Content $IBMBFile
-	$line = $content | Select-String "TenantID =" | Select-Object -ExpandProperty Line
-	$content = $content.Replace( $line, "[string]`$TenantID = ""$TenantID""") 
-	$line = $content | Select-String "AppID =" | Select-Object -ExpandProperty Line
-	$content = $content.Replace( $line, "[string]`$AppID = ""$AppID""") 
-	$line = $content | Select-String "AppSecret =" | Select-Object -ExpandProperty Line
-	$content = $content.Replace( $line, "[string]`$AppSecret = ""$AppSecret""") 
-	Set-Content "$IBMBFile" -Value $content
-
-}
 function Get-IntuneJson() {
 	[cmdletbinding()]
 	<#
@@ -291,7 +183,6 @@ function Get-IntuneJson() {
 	param
 	(
 		[string]$id
-	
 	)
 	
 	# Defining Variables
@@ -299,6 +190,7 @@ function Get-IntuneJson() {
 	$uri = "https://graph.microsoft.com/$graphApiVersion/deviceManagement/windowsAutopilotDeploymentProfiles/$id"
 	$approfile = Invoke-MGGraphRequest -Uri $uri -Method Get -OutputType PSObject
 	
+	Get-MgContext
 	# Set the org-related info
 	$script:TenantOrg = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/organization" -OutputType PSObject).value
 	foreach ($domain in $script:TenantOrg.VerifiedDomains) {
@@ -306,7 +198,7 @@ function Get-IntuneJson() {
 			$script:TenantDomain = $domain.name
 		}
 	}
-	$oobeSettings = $approfile.outOfBoxExperienceSettings
+	i$oobeSettings = $approfile.outOfBoxExperienceSettings
 	
 	# Build up properties
 	$json = @{}
@@ -541,9 +433,6 @@ function Connect-Intune{
 #	Main
 ###########################################################
 
-Connect-Intune -Scopes "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Organization.ReadWrite.All, User.Read.All"
-Exit 0
-
 $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))) {
@@ -598,7 +487,7 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
 }
 
-Connect-Intune -SettingsFile "$WorkPath\Settings.json" -Scopes "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Organization.ReadWrite.All, User.Read.All"
+Connect-Intune -SettingsFile "$WorkPath\Settings.json" -Scopes "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All"
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 
