@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
 	Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
 
@@ -16,17 +16,19 @@
 
 .NOTES
 
-	Version:		1.0
+	Version:		1.1
 	Author: 		Thomas Hoins 
 					Datagroup OIT
  	initial Date:	10.12.2024
  	Changes: 		07.01.2025 first fully functional version
+	Changes: 		13.01.2025 Added the possibility to create a new App Registration if no TenantID is available
+	Changes: 		31.01.2025 Changed the function to connect to Graph using Connect-Intune now
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
 
 .COMPONENT
-	Requires Modules Microsoft.Graph.Authentication
+	Requires Modules Microsoft.Graph.Authentication, Az.Accounts
 
 .PARAMETER PEPath
 Specifies the path where the PE files will be cached.
@@ -119,6 +121,7 @@ Creates a PE image using a specified ADK version.
 #>
 
 #Requires -Modules Microsoft.Graph.Authentication
+#Requires -Modules Az.Accounts
 
 Param (
 	[string]$PEPath,
@@ -137,16 +140,15 @@ Param (
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion = "10.1.22621.1",
-	[string]$TenantID = "22c3b957-8768-4139-8b5e-279747e3ecbf",
-	[string]$AppId = "31f7ef0c-9662-4522-bb32-f1b8c2d5a7c3",
-	[string]$AppSecret = "b_u8Q~kVtK6Es0BAmtvB~wq4pvfWoY1vVUGnTahX",
+	[string]$TenantID = "",
+	[string]$AppId = "",
+	[string]$AppSecret = "",
 	[string]$ProfileID = "41b669f0-86d4-4363-b666-5046469d0611"
 )	
 
 ###########################################################
 #	Functions
 ###########################################################
-
 function Clear-Path {
 	# Clean Up
 	Write-Host "Cleaning up files"
@@ -181,15 +183,14 @@ function Get-IntuneJson() {
 	param
 	(
 		[string]$id
-	
 	)
 	
 	# Defining Variables
 	$graphApiVersion = "beta"
-	$Resource = "deviceManagement/windowsAutopilotDeploymentProfiles"
-	$uri = "https://graph.microsoft.com/$graphApiVersion/$Resource/$id"
+	$uri = "https://graph.microsoft.com/$graphApiVersion/deviceManagement/windowsAutopilotDeploymentProfiles/$id"
 	$approfile = Invoke-MGGraphRequest -Uri $uri -Method Get -OutputType PSObject
 	
+	Get-MgContext
 	# Set the org-related info
 	$script:TenantOrg = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/organization" -OutputType PSObject).value
 	foreach ($domain in $script:TenantOrg.VerifiedDomains) {
@@ -197,7 +198,7 @@ function Get-IntuneJson() {
 			$script:TenantDomain = $domain.name
 		}
 	}
-	$oobeSettings = $approfile.outOfBoxExperienceSettings
+	i$oobeSettings = $approfile.outOfBoxExperienceSettings
 	
 	# Build up properties
 	$json = @{}
@@ -274,9 +275,164 @@ function Get-IntuneJson() {
 	ConvertTo-JSON $json
 }
 
+function Connect-Intune{
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $false)]
+        [string]$SettingsFile = "$env:Temp\Settings.json",
+		[Parameter(Mandatory = $false)]
+        [string]$Scopes = "DeviceManagementApps.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All,DeviceManagementConfiguration.ReadWrite.All, Application.ReadWrite.All",
+        [Parameter(Mandatory = $false)]
+        [string]$AppName = "Intune App Registration (Custom)",
+		[Parameter(Mandatory = $false)]
+		[string[]]$ApplicationPermissions = "DeviceManagementApps.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, Application.ReadWrite.All",
+		[Parameter(Mandatory = $false)]
+		[string[]]$DelegationPermissions = "User.Read.All"
+
+    )
+    If (Test-Path -Path $SettingsFile){
+		Write-Host "Reading Settings file..." -ForegroundColor Yellow
+		Get-Content -Path $SettingsFile | ConvertFrom-Json | ForEach-Object {
+			$TenantID = $_.TenantID
+			$AppID = $_.AppID
+			$AppSecret = $_.AppSecret
+		}
+		Write-Host "Settings file read successfully." -ForegroundColor Green
+		Write-Host "Using App Secret to connect to Tenant: $TenantID" -ForegroundColor Green
+		$SecureClientSecret = ConvertTo-SecureString -String $AppSecret -AsPlainText -Force
+		$ClientSecretCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $AppId, $SecureClientSecret
+		Connect-MgGraph -TenantId $TenantID -ClientSecretCredential $ClientSecretCredential -NoWelcome
+		$ErrorActionPreference = "Stop"
+		try {
+			$null = Get-MgApplication 
+		}
+		catch {
+			Write-Host "==========================================" -ForegroundColor Red
+			Write-Host " Make sure to grant admin consent to your " -ForegroundColor Red
+			Write-Host " API permissions in your newly created " -ForegroundColor Red
+			Write-Host " App registration !!! " -ForegroundColor Red
+			Write-Host "==========================================" -ForegroundColor Red
+			Write-Host "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade/quickStartType~/null/sourceType/Microsoft_AAD_IAM" -ForegroundColor Green
+			Write-Host $Error[0].ErrorDetails
+			Exit 1  
+		}
+	}
+	Else{
+		Write-Host "Settings file not found. Creating a new one..." -ForegroundColor Yellow
+
+		Connect-MgGraph -Scopes $Scopes -NoWelcome
+
+		$TenantData =Get-MgContext
+		$TenantID = $TenantData.TenantId
+
+		#Create a new Application
+		$AppObj = Get-MgApplication -Filter "DisplayName eq '$AppName'"
+		If ($AppObj){
+			$AppID = $AppObj.AppId
+			Write-Host "App already exists. Updating existing App." -ForegroundColor Yellow
+		}
+		Else{
+			Write-Host "Creating a new Application..." -ForegroundColor Yellow 
+			$AppObj = New-MgApplication -DisplayName $AppName
+			$AppID = $AppObj.AppId
+			If($AppID){
+				Write-Host "App created successfully. App ID: $AppID" -ForegroundColor Green
+			}
+			Else{
+				Write-Host "Failed to create the App. Please check the parameters and try again." -ForegroundColor Red
+				Exit 1  
+			}
+		}
+		# Define Application and Delegation Permission ids and type in a hash
+		$AppPermissions = $ApplicationPermissions.Split(",").Trim()
+		$permissions = [ordered]@{}
+		$PermID = ""
+		foreach($APermission in $AppPermissions){
+			$PermID = (Find-MgGraphPermission $APermission -PermissionType Application -ExactMatch).Id
+			$permissions.add($PermID,"Role")
+		}
+		$DelPermissions = $DelegationPermissions.Split(",").Trim()
+		$PermID = ""
+		foreach($DPermission in $DelPermissions){
+			$PermID = (Find-MgGraphPermission $DPermission -PermissionType Delegated -ExactMatch).Id
+			$permissions.add($PermID,"Scope")
+		}
+
+		# Build the accessBody for the hash
+		$accessBody = [ordered]@{
+			value = @(
+				@{
+					resourceAppId  = "00000003-0000-0000-c000-000000000000"
+					resourceAccess = @()
+				}
+			)
+		}
+
+		# Add the  id/type pairs to the resourceAccess array
+		foreach ($id in $permissions.Keys) {
+			$accessBody.value[0].resourceAccess += @{
+				id   = $id
+				type = $permissions[$id]
+			}
+		}
+
+		# Aplly upload the selected permissions via Graph API
+		$fileUri = "https://graph.microsoft.com/v1.0/applications/$($AppObj.ID)/RequiredResourceAccess"
+		try{
+			$null = Invoke-MgGraphRequest -Method PATCH -Uri $fileUri -Body ($accessBody | ConvertTo-Json -Depth 4) 
+		}
+		catch{
+			Write-Host "Failed to update the Required Resource Access. Status code: $($_.Exception.Message)" -ForegroundColor Red
+			Exit 1
+		}
+
+		$passwordCred = @{
+			"displayName" = "$($AppName)Secret"
+			"endDateTime" = (Get-Date).AddMonths(+12)
+		}
+		$ClientSecret = Add-MgApplicationPassword -ApplicationId  $AppObj.ID -PasswordCredential $passwordCred
+
+		$AppSecret = $ClientSecret.SecretText
+		If($AppSecret){
+			Write-Host "App Secret ($AppSecret) created successfully." -ForegroundColor Green
+		}
+		Else{
+			Write-Host "Failed to create the App Secret. Please check the parameters and try again." -ForegroundColor Red
+			Exit 1
+		}
+
+		#Update Settings file with gathered information
+		$Settings = [ordered]@{
+			_Comment1 = "Make sure to keep this secret safe. This secret can be used to connect to your tenant!"
+			_Comment2 = "The following permissions are granted with this secret"
+			_Comment3 = $AppPermissions,$DelPermissions
+			AppName = $AppObj.DisplayName
+			CreatedBy = $TenantData.Account
+			TenantID = $TenantID
+			AppID = $AppID
+			AppSecret = $AppSecret
+		}
+		Out-File -FilePath $SettingsFile -InputObject ($Settings | ConvertTo-Json)
+
+		Write-Host ""
+		Write-Host "==========================================================" -ForegroundColor Red
+		Write-Host " A new App Registration ""$($AppObj.DisplayName)"" " -ForegroundColor Green
+		Write-Host " has been created." -ForegroundColor Green
+		Write-Host " Make sure to grant admin consent to your " -ForegroundColor Red
+		Write-Host " API permissions in your newly created " -ForegroundColor Red
+		Write-Host " App registration !!! " -ForegroundColor Red
+		Write-Host  "==========================================================" -ForegroundColor Red
+		Write-Host " Use this URL to grant consent:" -ForegroundColor Green
+		Write-Host "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade/quickStartType~/null/sourceType/Microsoft_AAD_IAM" -ForegroundColor Green
+		Exit 0
+	}
+}
+
+
 ###########################################################
 #	Main
 ###########################################################
+
 $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))) {
@@ -331,26 +487,17 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
 }
 
-# aquire Json Data from tenant
-# If a Logon Profile with sufficient permissin is available we try to log on as application, otherwise we will be asked for credentials
-If (!([string]::IsNullOrEmpty($AppId))-and !([string]::IsNullOrEmpty($AppSecret))) {
-	$SecureClientSecret = ConvertTo-SecureString -String $AppSecret -AsPlainText -Force
-	$ClientSecretCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $AppId, $SecureClientSecret
-	# Connect to Microsoft Graph Using the Tenant ID and Client Secret Credential
-	$null = Connect-MgGraph -TenantId $TenantID -ClientSecretCredential $ClientSecretCredential -NoWelcome
-	}
-
-If (!(Get-MgContext)){
-	$null = Connect-MgGraph 
-	$TenantID = (Get-MgContext).TenantId
-}
+Connect-Intune -SettingsFile "$WorkPath\Settings.json" -Scopes "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All"
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 
 #Ask dor media type to build
-$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
+do {
+	$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
+} while ($MediaSelection -notin @('I', 'U'))
 
-If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 7516192768 -and $MediaSelection -eq "U") {
+$usbDrive = Get-Disk | Where-Object BusType -eq 'USB' | Select-Object -First 1
+If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 	Write-Host "This USB stick is too small!"
 	Exit
 } 
