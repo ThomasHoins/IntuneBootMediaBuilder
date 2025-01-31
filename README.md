@@ -78,6 +78,8 @@ Make sure that the following entry is added to your script suring the "specializ
 
 
 ## Usage
+The first time you use the script it will only create a Settings.json file, add an App registration with secret and end the script.
+The next time you start the script it will use the settings.json to connect to intune and build the image/USB media.
 
 ### Example 1: Create an ISO file
 ```powershell
