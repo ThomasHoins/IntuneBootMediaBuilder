@@ -16,13 +16,14 @@
 
 .NOTES
 
-	Version:		1.1
+	Version:		1.1.1
 	Author: 		Thomas Hoins 
 					Datagroup OIT
  	initial Date:	10.12.2024
  	Changes: 		07.01.2025 first fully functional version
 	Changes: 		13.01.2025 Added the possibility to create a new App Registration if no TenantID is available
 	Changes: 		31.01.2025 Changed the function to connect to Graph using Connect-Intune now
+ 	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
@@ -121,7 +122,7 @@ Creates a PE image using a specified ADK version.
 #>
 
 #Requires -Modules Microsoft.Graph.Authentication
-#Requires -Modules Az.Accounts
+#Requires -Modules Microsoft.Graph.Applications
 
 Param (
 	[string]$PEPath,
@@ -143,7 +144,7 @@ Param (
 	[string]$TenantID = "",
 	[string]$AppId = "",
 	[string]$AppSecret = "",
-	[string]$ProfileID = "41b669f0-86d4-4363-b666-5046469d0611"
+	[string]$ProfileID = "0b38e470-832e-427e-9f02-e28fb5387421"
 )	
 
 ###########################################################
@@ -198,7 +199,7 @@ function Get-IntuneJson() {
 			$script:TenantDomain = $domain.name
 		}
 	}
-	i$oobeSettings = $approfile.outOfBoxExperienceSettings
+	$oobeSettings = $approfile.outOfBoxExperienceSettings
 	
 	# Build up properties
 	$json = @{}
@@ -301,7 +302,7 @@ function Connect-Intune{
 		Write-Host "Using App Secret to connect to Tenant: $TenantID" -ForegroundColor Green
 		$SecureClientSecret = ConvertTo-SecureString -String $AppSecret -AsPlainText -Force
 		$ClientSecretCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $AppId, $SecureClientSecret
-		Connect-MgGraph -TenantId $TenantID -ClientSecretCredential $ClientSecretCredential -NoWelcome
+		$null = Connect-MgGraph -TenantId $TenantID -ClientSecretCredential $ClientSecretCredential -NoWelcome
 		$ErrorActionPreference = "Stop"
 		try {
 			$null = Get-MgApplication 
@@ -487,7 +488,7 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
 }
 
-Connect-Intune -SettingsFile "$WorkPath\Settings.json" -Scopes "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All"
+Connect-Intune -SettingsFile "$TempFolder\Settings.json" -Scopes "Application.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All"
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 
@@ -552,7 +553,7 @@ If (!(Test-Path -PathType Leaf "$WorkPath\Installation.iso")) {
 	$Isostartime = Get-Date
 	$origProgressPreference = $ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
-	Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
+    Invoke-Webrequest $DownloadISO -Outfile "$WorkPath\Installation.iso"
 	$ProgressPreference = $origProgressPreference
 	$Isoendtime = Get-Date
 	$time = $Isoendtime - $Isostartime
