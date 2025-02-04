@@ -23,7 +23,7 @@
  	Changes: 		07.01.2025 first fully functional version
 	Changes: 		13.01.2025 Added the possibility to create a new App Registration if no TenantID is available
 	Changes: 		31.01.2025 Changed the function to connect to Graph using Connect-Intune now
- 	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes
+ 	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes, removed some unneccesary lines from output
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
@@ -569,10 +569,10 @@ If (Test-Path -PathType Leaf $WorkPath\Installation.iso) {
 	$VolName = $InstVol.FileSystemLabel
 	$InstMediaPath = "$WorkPath\$VolName"
 	Remove-Item $InstMediaPath -Recurse -Force -ErrorAction SilentlyContinue
-	New-Item -ItemType Directory -Path $InstMediaPath
+	$null = New-Item -ItemType Directory -Path $InstMediaPath
 	Write-Host "Copying installation data to $InstMediaPath please be patient!" -ForegroundColor Red
-	Start-Process "$($env:windir)\System32\Robocopy.exe" "/NP /s /z ""$InstDriveLetter"" ""$InstMediaPath""" -Wait -NoNewWindow
-	Dismount-DiskImage -ImagePath $WorkPath\Installation.iso
+	$null = Start-Process "$($env:windir)\System32\Robocopy.exe" "/NP /s /z ""$InstDriveLetter"" ""$InstMediaPath""" -Wait -NoNewWindow
+	$null = Dismount-DiskImage -ImagePath $WorkPath\Installation.iso
 }
 Else {
 	Write-Host "$WorkPath\Installation.iso  not found! Exiting"
@@ -581,24 +581,24 @@ Else {
 }
 
 ###########################################################
-#	Prepareing Boot Image
+#	Preparing Boot Image
 ###########################################################
 
 Write-Host "Preparing Boot Image"
 
 # prepare directory f. PE
 Remove-Item $BootPath -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $BootPath
+$null = New-Item -ItemType Directory -Path $BootPath
 
 # mount Boot Image
 Write-Host "Mounting Boot Image"
 $BootWimTemp = "$InstMediaPath\sources\Boot.wim"
-Set-ItemProperty -Path $BootWimTemp -Name IsReadOnly -Value $false
+$null = Set-ItemProperty -Path $BootWimTemp -Name IsReadOnly -Value $false
 Mount-WindowsImage -ImagePath $BootWimTemp -Index:2 -Path $BootPath
 
 # Inject Drivers to BootImage
 Write-Host "Adding drivers to Boot Image"
-Add-WindowsDriver -Path $BootPath -Driver $DriverFolder -Recurse
+$null = Add-WindowsDriver -Path $BootPath -Driver $DriverFolder -Recurse
 
 # Add Components to BootImage
 Write-Host "Adding components to Boot Image"
@@ -607,12 +607,12 @@ $ComponetsPaths = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environ
 $ComponetsPathsEn = (Get-ChildItem -Path "$ADKPath\Windows Preinstallation Environment\amd64\WinPE_OCs\en-us\*" -include $Components).FullName
 
 Remove-Item $PackageTemp -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $PackageTemp
+$null = New-Item -ItemType Directory -Path $PackageTemp
 
 ForEach ($Path in $ComponetsPaths + $ComponetsPathsEn) {
-	Copy-Item $Path $PackageTemp
+	$null = Copy-Item $Path $PackageTemp
 } 
-Add-WindowsPackage -Path $BootPath -PackagePath $PackageTemp -IgnoreCheck
+$null = Add-WindowsPackage -Path $BootPath -PackagePath $PackageTemp -IgnoreCheck
 Get-WindowsPackage -Path $BootPath | Format-Table -AutoSize | Out-File "$WorkPath\Components.txt"
 
 # Add new Start Script to BootImage
@@ -623,7 +623,7 @@ $DiskpartScript = @"
 select disk 0
 clean
 "@
-Add-Content -Path "$BootPath\Windows\System32\diskpart.txt" -Value $DiskpartScript
+$null = Add-Content -Path "$BootPath\Windows\System32\diskpart.txt" -Value $DiskpartScript
 
 $startnetText = @"
 `@ ECHO OFF
@@ -640,10 +640,10 @@ ping 127.0.0.1 -n 20 >NUL
 wpeinit
 "@
 
-Add-Content -Path "$BootPath\Windows\System32\startnet.cmd" -Value $startnetText
+$null = Add-Content -Path "$BootPath\Windows\System32\startnet.cmd" -Value $startnetText
 
 # Unmount Boot Image
-Dismount-WindowsImage -Path $BootPath -Save
+$null = Dismount-WindowsImage -Path $BootPath -Save
 
 ###########################################################
 #	Prepareing Install Image
@@ -653,7 +653,7 @@ Write-Host "Preparing Install Image"
 
 # prepare directory f. Install.wim
 Remove-Item $InstWimPath -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $InstWimPath
+$null = New-Item -ItemType Directory -Path $InstWimPath
 
 # mount Install Image
 $InstWimTemp = "$InstMediaPath\sources\Install.wim"
@@ -662,23 +662,30 @@ $InstallSWMFile = "$InstMediaPath\sources\Install.swm"
 Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 Mount-WindowsImage -ImagePath $InstWimTemp -Name $WindowsVersion -Path $InstWimPath
 Write-Host "Adding drivers to Install Image"
-Add-WindowsDriver -Path $InstWimPath -Driver $DriverFolder -Recurse
+$null = Add-WindowsDriver -Path $InstWimPath -Driver $DriverFolder -Recurse
 
 
 # inject Intune Profile
 $ProfileJSON | Set-Content -Encoding Ascii "$InstWimPath\Windows\Provisioning\Autopilot\AutopilotConfigurationFile.json"
 
 # Unmount Install Image
-Dismount-WindowsImage -Path $InstWimPath -Save -CheckIntegrity
+$null = Dismount-WindowsImage -Path $InstWimPath -Save -CheckIntegrity
 # Extract selected Windows Version
-Export-WindowsImage -SourceImagePath $InstWimTemp -SourceName $WindowsVersion -DestinationImagePath $InstWimDest
+$null = Export-WindowsImage -SourceImagePath $InstWimTemp -SourceName $WindowsVersion -DestinationImagePath $InstWimDest
 Remove-Item $InstWimTemp -Force
 Rename-Item $InstWimDest $InstWimTemp
 
 #Add Installation Files to $InstMediaPath
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Settings.ps1" -Outfile "$InstMediaPath\Settings.ps1"
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/UploadAutopilotInfo.ps1" -Outfile "$InstMediaPath\UploadAutopilotInfo.ps1"
-Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml" -Outfile "$InstMediaPath\autounattend.xml"
+
+# If a $AutounattendFile is supplied, use that, else download it
+If ([string]::IsNullOrEmpty($AutounattendFile)){
+    Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/autounattend.xml" -Outfile "$InstMediaPath\autounattend.xml"
+}
+Else{
+    copy-item $AutounattendFile "$InstMediaPath" -Force
+}
 
 #Create Wifi Profile (only the first Profile will be exported)
 If ($AutocreateWifiProfile) {
@@ -713,10 +720,9 @@ Set-Content "$InstMediaPath\Settings.ps1" -Value $content
 ###########################################################
 
 #Create Media
-copy-item $AutounattendFile "$InstMediaPath" -Force
+
 Switch ($MediaSelection) {
 	I {
-		#"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe" -bootdata:2#p0,e,b"$PEPath\fwfiles\etfsboot.com"#pEF,e,b"$PEPath\fwfiles\efisys.bin" -u1 -udfver102 "$InstMediaPath" "$IsoFileName"
 		#"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe" -bootdata:2#p0,e,b"$PEPath\fwfiles\etfsboot.com"#pEF,e,b"$PEPath\fwfiles\efisys.bin" -u1 -udfver102 "$InstMediaPath" "$IsoFileName"
 		# Test if all required files are there and create an Installation ISO
 		if (!(Test-Path $IsoPath)) {
