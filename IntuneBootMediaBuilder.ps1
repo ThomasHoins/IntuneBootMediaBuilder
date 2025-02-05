@@ -552,16 +552,8 @@ If ([string]::IsNullOrEmpty($DownloadISO) ) {
 		}
 		Else {
 			$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
-			
-		}
-	}
-	Else {
-		$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
-		Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
-	}
-	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
-	# Make window visible again
-	Add-Type @"
+			# Make window visible again (this is sitting crooked, because PS needs it this way)
+			Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public class WinAPI {
@@ -570,8 +562,15 @@ public class WinAPI {
 	public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }
 "@
-	$hwnd = (Get-Process -Id $PID).MainWindowHandle
-	[WinAPI]::ShowWindow($hwnd, 1) | Out-Null
+			$hwnd = (Get-Process -Id $PID).MainWindowHandle
+			[WinAPI]::ShowWindow($hwnd, 1) | Out-Null
+		}
+	}
+	Else {
+		$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
+		Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
+	}
+	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 }
 
 #Download the ISO file if not already present
