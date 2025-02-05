@@ -512,6 +512,31 @@ If (!([string]::IsNullOrEmpty($DownloadISO))-and $MediaSelection -eq "I") {
 	}
 }
 
+#Create Wifi Profile (User can select a Profile)
+If ($AutocreateWifiProfile) {
+	$list=((netsh.exe wlan show profiles) -match ' : ')
+	If($list.Count -ne 0) {
+		$ProfileNames = $list.Split(":").Trim()
+		If ($list.Count -gt 1) {
+			For( $i = 1; $i -lt $ProfileNames.Count; $i +=2) {
+				Write-Host "[$(($i+1)/2)] $($ProfileNames[$i]) "
+			}
+			[int]$selection = Read-Host -Prompt "Select Profile Number"
+			$Index = $selection*2-1
+			$ProfileName = $ProfileNames[$Index] 
+		}
+		Else{
+			$ProfileName = $ProfileNames[0] 
+		}
+		Write-Host "Exporting $ProfileName" -ForegroundColor Green
+
+	}
+	else {
+		Write-Host "No Wifi Profile found!" -ForegroundColor Yellow
+		$ProfileName = ""
+	}
+}
+
 ###########################################################
 #	Downloading Installation Media
 ###########################################################
@@ -688,38 +713,13 @@ Else{
     copy-item $AutounattendFile "$InstMediaPath" -Force
 }
 
-#Create Wifi Profile (only the first Profile will be exported)
-If ($AutocreateWifiProfile) {
-	$list=((netsh.exe wlan show profiles) -match ' : ')
-	If($list.Count -ne 0) {
-		$ProfileNames = $list.Split(":").Trim()
-		If ($list.Count -gt 1) {
-			For( $i = 1; $i -lt $ProfileNames.Count; $i +=2) {
-				Write-Host "[$(($i+1)/2)] $($ProfileNames[$i]) "
-			}
-			[int]$selection = Read-Host -Prompt "Select Profile Number"
-			$Index = $selection*2-1
-			$ProfileName = $ProfileNames[$Index] 
-		}
-		Else{
-			$ProfileName = $ProfileNames[0] 
-		}
-		Write-Host "Exporting $ProfileName" -ForegroundColor Green
-		$ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMediaPath\") -split """")[5]
-		$Name = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
-		$content = Get-Content "$InstMediaPath\Settings.ps1"
-		$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
-		$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
-		Set-Content "$InstMediaPath\Settings.ps1" -Value $content
-	}
-	else {
-		Write-Host "No Wifi Profile found!" -ForegroundColor Yellow
-	}
-}
-
-#Add the Tenant Settings to the Settings.ps1
+#Add the Tenant & Wifi Settings to the Settings.ps1
+$ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMediaPath\") -split """")[5]
+$Name = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
 $Settings = Get-Content "$TempFolder\Settings.json" | ConvertFrom-Json
 $content = Get-Content "$InstMediaPath\Settings.ps1"
+$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
+$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "TenantId =" | Select-Object -ExpandProperty Line
 $content = $content.Replace( $line, "[string]`$TenantId  = ""$($Settings.TenantID)""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppId =" | Select-Object -ExpandProperty Line
@@ -775,10 +775,11 @@ Switch ($MediaSelection) {
 		
 	}
 	U {
-        Write-Host "Formatting USB Drive" -ForegroundColor Red
 		$usbDrive = (Get-Disk | Where-Object Path -like '*usbstor*')
+        Write-Host "Formatting $($usbDrive.FriendlyName)" -ForegroundColor Red
+        Start-Sleep 5
 		$usbDriveNumber = $usbDrive.Number
-		Get-Partition $usbDriveNumber | Remove-Partition
+		Get-Partition $usbDriveNumber | Remove-Partition -Confirm:$false
 		If ($MultiParitionUSB) {
 			#rework this part, all Setup stuff has to go to I: !
 			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
