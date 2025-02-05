@@ -505,15 +505,15 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 	Exit
 } 
 
-If (!([string]::IsNullOrEmpty($DownloadISO))-and $MediaSelection -eq "I") {
-	If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
-		Write-Host "No ADK has been found, installing it!"
-		winget install Microsoft.WindowsADK --version $ADKVersion
-		winget install Microsoft.ADKPEAddon --version $ADKVersion
-	}
+# Downloading ADK as we will need it for the components and oscdimg
+If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
+	Write-Host "No ADK has been found, installing it!"
+	winget install Microsoft.WindowsADK --version $ADKVersion
+	winget install Microsoft.ADKPEAddon --version $ADKVersion
 }
 
-#Create Wifi Profile (User can select a Profile)
+
+# Create Wifi Profile (User can select a Profile)
 If ($AutocreateWifiProfile) {
 	$list=((netsh.exe wlan show profiles) -match ' : ')
 	If($list.Count -ne 0) {
