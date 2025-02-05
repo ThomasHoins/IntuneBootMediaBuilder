@@ -508,8 +508,8 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 # Downloading ADK as we will need it for the components and oscdimg
 If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
 	Write-Host "No ADK has been found, installing it!"
-	winget install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements
-	winget install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements
+	winget install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements  | Out-Null
+	winget install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements  | Out-Null
 }
 
 
