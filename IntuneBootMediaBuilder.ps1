@@ -446,7 +446,7 @@ Clear-Path
 
 #create Path environment create new workdir if "binschonda.txt" does not exist
 If (!(Test-Path -Path $TempFolder)) {
-	New-Item -ItemType Directory -Path $TempFolder
+	$null = New-Item -ItemType Directory -Path $TempFolder
 }
 $WorkPath = (Get-ChildItem -Path $TempFolder -Include binschonda.txt -File -Recurse -ErrorAction SilentlyContinue).DirectoryName
 If (([string]::IsNullOrEmpty($WorkPath))) {
@@ -454,7 +454,8 @@ If (([string]::IsNullOrEmpty($WorkPath))) {
 	$date = (get-date -format yyyyMMddmmss).ToString()
 	$TempPath = "$date-$random"
 	$WorkPath = "$TempFolder\$TempPath"
-	New-Item -ItemType Directory -Path $WorkPath
+	$null = New-Item -ItemType Directory -Path $WorkPath
+ 	Write-Host "Created an new work folder $WorkPath"
 }	
 
 #Add minimal Drivers from Repository
