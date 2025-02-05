@@ -23,7 +23,8 @@
  	Changes: 		07.01.2025 first fully functional version
 	Changes: 		13.01.2025 Added the possibility to create a new App Registration if no TenantID is available
 	Changes: 		31.01.2025 Changed the function to connect to Graph using Connect-Intune now
- 	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes, removed some unneccesary lines from output
+	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes, removed some unneccesary lines from output
+	Changes: 		04.02.2025 Bug Fixing, Tenant settings Missing in Settings.ps1 and Wi-Fi now selectable
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
@@ -141,9 +142,9 @@ Param (
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion = "10.1.22621.1",
-	[string]$TenantID = "",
-	[string]$AppId = "",
-	[string]$AppSecret = "",
+	[string]$TenantID,
+	[string]$AppId,
+	[string]$AppSecret,
 	[string]$ProfileID = "0b38e470-832e-427e-9f02-e28fb5387421"
 )	
 
@@ -491,8 +492,8 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 Connect-Intune -SettingsFile "$TempFolder\Settings.json" -Scopes "Application.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All"
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
-
-#Ask dor media type to build
+$ProfileJSON | Set-Content -Encoding Ascii "$WorkPath\AutopilotConfigurationFile.json"
+#Ask for media type to build
 do {
 	$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
 } while ($MediaSelection -notin @('I', 'U'))
@@ -525,7 +526,7 @@ If ([string]::IsNullOrEmpty($DownloadISO) ) {
 		}
 		Else {
 			$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
-			Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
+			
 		}
 	}
 	Else {
@@ -690,8 +691,20 @@ Else{
 #Create Wifi Profile (only the first Profile will be exported)
 If ($AutocreateWifiProfile) {
 	$list=((netsh.exe wlan show profiles) -match ' : ')
-	If($List.Count -ne 0) {
-		$ProfileName=$List.Split(":")[1].Trim()
+	If($list.Count -ne 0) {
+		$ProfileNames = $list.Split(":").Trim()
+		If ($list.Count -gt 1) {
+			For( $i = 1; $i -lt $ProfileNames.Count; $i +=2) {
+				Write-Host "[$(($i+1)/2)] $($ProfileNames[$i]) "
+			}
+			[int]$selection = Read-Host -Prompt "Select Profile Number"
+			$Index = $selection*2-1
+			$ProfileName = $ProfileNames[$Index] 
+		}
+		Else{
+			$ProfileName = $ProfileNames[0] 
+		}
+		Write-Host "Exporting $ProfileName" -ForegroundColor Green
 		$ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMediaPath\") -split """")[5]
 		$Name = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
 		$content = Get-Content "$InstMediaPath\Settings.ps1"
@@ -704,14 +717,15 @@ If ($AutocreateWifiProfile) {
 	}
 }
 
-#Add the $TenantId, $AppId, $AppSecret in the Setting with the values from parameters
+#Add the Tenant Settings to the Settings.ps1
+$Settings = Get-Content "$TempFolder\Settings.json" | ConvertFrom-Json
 $content = Get-Content "$InstMediaPath\Settings.ps1"
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "TenantId =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$TenantId = ""$TenantID""") 
+$content = $content.Replace( $line, "[string]`$TenantId  = ""$($Settings.TenantID)""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppId =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$AppId = ""$AppId""") 
+$content = $content.Replace( $line, "[string]`$AppId  = ""$($Settings.AppId)""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppSecret =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$AppSecret = ""$AppSecret""") 
+$content = $content.Replace( $line, "[string]`$AppSecret  = ""$($Settings.AppSecret)""") 
 Set-Content "$InstMediaPath\Settings.ps1" -Value $content
 
 
@@ -761,6 +775,7 @@ Switch ($MediaSelection) {
 		
 	}
 	U {
+        Write-Host "Formatting USB Drive" -ForegroundColor Red
 		$usbDrive = (Get-Disk | Where-Object Path -like '*usbstor*')
 		$usbDriveNumber = $usbDrive.Number
 		Get-Partition $usbDriveNumber | Remove-Partition
@@ -776,12 +791,14 @@ Switch ($MediaSelection) {
 		}
 		Else {
 			If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 2199023255552) {
+                Initialize-Disk -Number $usbDriveNumber -PartitionStyle MBR -confirm:$false
 				New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			}
 			Else {
+                Initialize-Disk -Number $usbDriveNumber -PartitionStyle MBR -confirm:$false
 				New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			}
-			Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
+			$null = Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 			#Split the install.wim if greater 4GiB
 			If ((Get-Item $InstWimTemp).Length -gt 4294967295) {
 				Split-WindowsImage -ImagePath "$InstWimTemp" -SplitImagePath $InstallSWMFile -FileSize 4096 -CheckIntegrity
