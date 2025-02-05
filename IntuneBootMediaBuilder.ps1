@@ -793,11 +793,9 @@ Switch ($MediaSelection) {
 		}
 		Else {
 			If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 2199023255552) {
-                Initialize-Disk -Number $usbDriveNumber -PartitionStyle MBR -confirm:$false
 				New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			}
 			Else {
-                Initialize-Disk -Number $usbDriveNumber -PartitionStyle MBR -confirm:$false
 				New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			}
 			$null = Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
