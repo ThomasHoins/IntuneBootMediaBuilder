@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.1.1
+	Version:		1.2.0
 	Author: 		Thomas Hoins 
 					Datagroup OIT
  	initial Date:	10.12.2024
@@ -25,12 +25,13 @@
 	Changes: 		31.01.2025 Changed the function to connect to Graph using Connect-Intune now
 	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes, removed some unneccesary lines from output
 	Changes: 		04.02.2025 Bug Fixing, Tenant settings Missing in Settings.ps1 and Wi-Fi now selectable
+	Changes: 		05.02.2025 Automatic Module Loading, Wi-Fi Profile Selection, Bug Fixing
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
 
 .COMPONENT
-	Requires Modules Microsoft.Graph.Authentication, Az.Accounts
+	Requires Modules Microsoft.Graph.Authentication, Microsoft.Graph.Applications
 
 .PARAMETER PEPath
 Specifies the path where the PE files will be cached.
@@ -122,8 +123,6 @@ Creates a PE image using a specified ADK version.
 
 #>
 
-#Requires -Modules Microsoft.Graph.Authentication
-#Requires -Modules Microsoft.Graph.Applications
 
 Param (
 	[string]$PEPath,
@@ -141,7 +140,7 @@ Param (
 	[string]$DriverFolder = "C:\Temp\Drivers",
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
-	[string]$ADKVersion = "10.1.22621.1",
+	[string]$ADKVersion,	#  "10.1.22621.1"
 	[string]$TenantID,
 	[string]$AppId,
 	[string]$AppSecret,
@@ -430,7 +429,6 @@ function Connect-Intune{
 	}
 }
 
-
 ###########################################################
 #	Main
 ###########################################################
@@ -440,6 +438,16 @@ $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.
 If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))) {
 	Write-Host "Admin permissions required!"
 	Exit
+}
+
+# Check if the required modules are installed
+$modules =  'Microsoft.Graph.Authentication','Microsoft.Graph.Applications'
+$installed = @((Get-Module $modules -ListAvailable).Name | Select-Object -Unique)
+$notInstalled = Compare-Object $modules $installed -PassThru
+# At least one module is missing. Install the missing modules now.
+if ($notInstalled) { 
+	Write-Host "Installing required modules..." -ForegroundColor Yellow
+	Install-Module -Scope CurrentUser $notInstalled -Force -AllowClobber
 }
 
 Clear-Path
@@ -506,10 +514,16 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 } 
 
 # Downloading ADK as we will need it for the components and oscdimg
-If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
+If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")) {
 	Write-Host "No ADK has been found, installing it!"
-	winget install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements  | Out-Null
-	winget install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements  | Out-Null
+	If ($ADKVersion){
+		winget install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+		winget install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+  	} 
+	Else{
+		winget install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+		winget install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+  	} 
 }
 
 
@@ -800,8 +814,8 @@ Switch ($MediaSelection) {
 			$null = Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 			#Split the install.wim if greater 4GiB
 			If ((Get-Item $InstWimTemp).Length -gt 4294967295) {
-				Split-WindowsImage -ImagePath "$InstWimTemp" -SplitImagePath $InstallSWMFile -FileSize 4096 -CheckIntegrity
-				Remove-Item "$InstWimTemp" -Force
+				$null = Split-WindowsImage -ImagePath "$InstWimTemp" -SplitImagePath $InstallSWMFile -FileSize 4096 -CheckIntegrity
+				$null = Remove-Item "$InstWimTemp" -Force
 			}
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P:" -Wait -NoNewWindow
 		}
@@ -809,8 +823,6 @@ Switch ($MediaSelection) {
 	}
 }
 $EndTime = Get-Date
-Write-Host $startTime
-Write-Host $EndTime
 $time = $EndTime - $startTime
 Write-Host "It Took $($time.Hours)h:$($time.Minutes)m:$($time.Seconds)s to Build this Media" -ForegroundColor Magenta
 Write-Host "We are done!" -ForegroundColor Green
