@@ -144,7 +144,7 @@ Param (
 	[string]$TenantID,
 	[string]$AppId,
 	[string]$AppSecret,
-	[string]$ProfileID = 4ea72baa-ff3a-45c3-96d4-1aca14a72899" # "0b38e470-832e-427e-9f02-e28fb5387421"
+	[string]$ProfileID = "4ea72baa-ff3a-45c3-96d4-1aca14a72899" # "0b38e470-832e-427e-9f02-e28fb5387421"
 )	
 
 ###########################################################
