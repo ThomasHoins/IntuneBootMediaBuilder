@@ -27,6 +27,14 @@
 	Changes: 		04.02.2025 Bug Fixing, Tenant settings Missing in Settings.ps1 and Wi-Fi now selectable
 	Changes: 		05.02.2025 Automatic Module Loading, Wi-Fi Profile Selection, Bug Fixing
 	Changes: 		07.02.2025 Removed unneccesary permissions in App reg.
+ 				Original Permissions:
+					"DeviceManagementConfiguration.ReadWrite.All",
+					"DeviceManagementServiceConfig.ReadWrite.All",
+					"Directory.ReadWrite.All",
+					"Directory.Read.All",
+					"Organization.Read.All",
+					"User.Read.All"
+
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
