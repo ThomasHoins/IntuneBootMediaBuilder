@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.2.0
+	Version:		1.2.1
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -26,6 +26,7 @@
 	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes, removed some unneccesary lines from output
 	Changes: 		04.02.2025 Bug Fixing, Tenant settings Missing in Settings.ps1 and Wi-Fi now selectable
 	Changes: 		05.02.2025 Automatic Module Loading, Wi-Fi Profile Selection, Bug Fixing
+	Changes: 		07.02.2025 Removed unneccesary permissions in App reg.
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
