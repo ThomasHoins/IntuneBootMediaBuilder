@@ -293,7 +293,7 @@ function Connect-Intune{
 		[Parameter(Mandatory = $false)]
         [string]$Scopes = "Application.ReadWrite.OwnedBy",
         [Parameter(Mandatory = $false)]
-        [string]$AppName = "Intune App Registration (Custom)",
+        [string]$AppName = " appreg-inune-BootMediaBuilder-Script-ReadWrite",
 		[Parameter(Mandatory = $false)]
 		[string[]]$ApplicationPermissions = "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All, Application.ReadWrite.OwnedBy",
 		[Parameter(Mandatory = $false)]
