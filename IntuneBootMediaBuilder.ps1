@@ -18,8 +18,8 @@
 
 	Version:		1.2.0
 	Author: 		Thomas Hoins 
-					Datagroup OIT
- 	initial Date:	10.12.2024
+				Datagroup OIT
+ 	initial Date:		10.12.2024
  	Changes: 		07.01.2025 first fully functional version
 	Changes: 		13.01.2025 Added the possibility to create a new App Registration if no TenantID is available
 	Changes: 		31.01.2025 Changed the function to connect to Graph using Connect-Intune now
