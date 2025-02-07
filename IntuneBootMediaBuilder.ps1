@@ -282,13 +282,13 @@ function Connect-Intune{
         [Parameter(Mandatory = $false)]
         [string]$SettingsFile = "$env:Temp\Settings.json",
 		[Parameter(Mandatory = $false)]
-        [string]$Scopes = "DeviceManagementApps.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All,DeviceManagementConfiguration.ReadWrite.All, Application.ReadWrite.All",
+        [string]$Scopes = "Application.ReadWrite.OwnedBy",
         [Parameter(Mandatory = $false)]
         [string]$AppName = "Intune App Registration (Custom)",
 		[Parameter(Mandatory = $false)]
-		[string[]]$ApplicationPermissions = "DeviceManagementApps.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, Application.ReadWrite.All",
+		[string[]]$ApplicationPermissions = "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All, Application.ReadWrite.OwnedBy",
 		[Parameter(Mandatory = $false)]
-		[string[]]$DelegationPermissions = "User.Read.All"
+		[string[]]$DelegationPermissions = ""
 
     )
     If (Test-Path -Path $SettingsFile){
