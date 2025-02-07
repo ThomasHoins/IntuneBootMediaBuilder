@@ -295,7 +295,7 @@ function Connect-Intune{
         [Parameter(Mandatory = $false)]
         [string]$AppName = "appreg-inune-BootMediaBuilder-Script-ReadWrite",
 		[Parameter(Mandatory = $false)]
-		[string[]]$ApplicationPermissions = "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All, Application.ReadWrite.OwnedBy",
+		[string[]]$ApplicationPermissions = "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All",
 		[Parameter(Mandatory = $false)]
 		[string[]]$DelegationPermissions = ""
 
@@ -312,6 +312,30 @@ function Connect-Intune{
 		$SecureClientSecret = ConvertTo-SecureString -String $AppSecret -AsPlainText -Force
 		$ClientSecretCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $AppId, $SecureClientSecret
 		$null = Connect-MgGraph -TenantId $TenantID -ClientSecretCredential $ClientSecretCredential -NoWelcome
+
+    #Test if Permissions are correct
+        $scopes = Get-MgContext | Select-Object -ExpandProperty Scopes
+        $IncorrectScopes = $false
+		foreach ($AppPerm in $ApplicationPermissions) {
+        	if ($scopes -notcontains $AppPerm) {$IncorrectScopes = $true}
+		}
+        if ($IncorrectScopes) {
+			Write-Host "==========================================" -ForegroundColor Red
+			Write-Host " The following permissions are required:" -ForegroundColor Red
+			Write-Host " $ApplicationPermissions" -ForegroundColor Green
+			Write-Host " Make sure to grant admin consent to your " -ForegroundColor Red
+			Write-Host " API permissions in your newly created " -ForegroundColor Red
+			Write-Host " App registration !!! " -ForegroundColor Red
+			Write-Host "==========================================" -ForegroundColor Red
+			Write-Host "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade/quickStartType~/null/sourceType/Microsoft_AAD_IAM" -ForegroundColor Green
+			Write-Host $Error[0].ErrorDetails
+			Exit 1 
+        }
+		else{
+            Write-Host "MS-Graph scopes are correct"     
+        }
+
+
 		$ErrorActionPreference = "Stop"
 		try {
 			$null = Get-MgApplication 
@@ -354,18 +378,23 @@ function Connect-Intune{
 			}
 		}
 		# Define Application and Delegation Permission ids and type in a hash
-		$AppPermissions = $ApplicationPermissions.Split(",").Trim()
 		$permissions = [ordered]@{}
-		$PermID = ""
-		foreach($APermission in $AppPermissions){
-			$PermID = (Find-MgGraphPermission $APermission -PermissionType Application -ExactMatch).Id
-			$permissions.add($PermID,"Role")
+		If ($ApplicationPermissions){
+			$AppPermissions = $ApplicationPermissions.Split(",").Trim()
+			$PermID = ""
+			foreach($APermission in $AppPermissions){
+				$PermID = (Find-MgGraphPermission $APermission -PermissionType Application -ExactMatch).Id
+				$permissions.add($PermID,"Role")
+			}
 		}
-		$DelPermissions = $DelegationPermissions.Split(",").Trim()
-		$PermID = ""
-		foreach($DPermission in $DelPermissions){
-			$PermID = (Find-MgGraphPermission $DPermission -PermissionType Delegated -ExactMatch).Id
-			$permissions.add($PermID,"Scope")
+
+		If ($DelegationPermissions){
+			$DelPermissions = $DelegationPermissions.Split(",").Trim()
+			$PermID = ""
+			foreach($DPermission in $DelPermissions){
+				$PermID = (Find-MgGraphPermission $DPermission -PermissionType Delegated -ExactMatch).Id
+				$permissions.add($PermID,"Scope")
+			}
 		}
 
 		# Build the accessBody for the hash
@@ -441,6 +470,8 @@ function Connect-Intune{
 ###########################################################
 #	Main
 ###########################################################
+Connect-Intune -SettingsFile "$TempFolder\appreg-inune-BootMediaBuilder-Script-ReadWrite-Prod.json" -AppName "appreg-inune-BootMediaBuilder-Script-ReadWrite-Prod" -Scopes "Application.ReadWrite.All" -ApplicationPermissions "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All"
+Exit 0
 
 $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
