@@ -485,7 +485,7 @@ $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))) {
 	Write-Host "Admin permissions required!"
-	#Exit
+	Exit
 }
 
 # Check if the required modules are installed
