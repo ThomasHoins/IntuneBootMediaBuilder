@@ -16,20 +16,32 @@
 
 .NOTES
 
-	Version:		1.1.1
+	Version:		1.2.1
 	Author: 		Thomas Hoins 
-					Datagroup OIT
- 	initial Date:	10.12.2024
+				Datagroup OIT
+ 	initial Date:		10.12.2024
  	Changes: 		07.01.2025 first fully functional version
 	Changes: 		13.01.2025 Added the possibility to create a new App Registration if no TenantID is available
 	Changes: 		31.01.2025 Changed the function to connect to Graph using Connect-Intune now
- 	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes, removed some unneccesary lines from output
+	Changes: 		04.02.2025 Bug Fixing with Modules and Scopes, removed some unneccesary lines from output
+	Changes: 		04.02.2025 Bug Fixing, Tenant settings Missing in Settings.ps1 and Wi-Fi now selectable
+	Changes: 		05.02.2025 Automatic Module Loading, Wi-Fi Profile Selection, Bug Fixing
+	Changes: 		07.02.2025 Removed unneccesary permissions in App reg.
+ 				Original Permissions:
+					"DeviceManagementConfiguration.ReadWrite.All",
+					"DeviceManagementServiceConfig.ReadWrite.All",
+					"Directory.ReadWrite.All",
+					"Directory.Read.All",
+					"Organization.Read.All",
+					"User.Read.All"
+	Changes: 		07.02.2025 added a scope check for the permissions	
+
 
 .LINK
 	[IntuneInstall](https://github.com/ThomasHoins/IntuneInstall)
 
 .COMPONENT
-	Requires Modules Microsoft.Graph.Authentication, Az.Accounts
+	Requires Modules Microsoft.Graph.Authentication, Microsoft.Graph.Applications
 
 .PARAMETER PEPath
 Specifies the path where the PE files will be cached.
@@ -121,8 +133,6 @@ Creates a PE image using a specified ADK version.
 
 #>
 
-#Requires -Modules Microsoft.Graph.Authentication
-#Requires -Modules Microsoft.Graph.Applications
 
 Param (
 	[string]$PEPath,
@@ -140,11 +150,11 @@ Param (
 	[string]$DriverFolder = "C:\Temp\Drivers",
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
-	[string]$ADKVersion = "10.1.22621.1",
-	[string]$TenantID = "",
-	[string]$AppId = "",
-	[string]$AppSecret = "",
-	[string]$ProfileID = "0b38e470-832e-427e-9f02-e28fb5387421"
+	[string]$ADKVersion,	#  "10.1.22621.1"
+	[string]$TenantID,
+	[string]$AppId,
+	[string]$AppSecret,
+	[string]$ProfileID = "4ea72baa-ff3a-45c3-96d4-1aca14a72899" # "0b38e470-832e-427e-9f02-e28fb5387421"
 )	
 
 ###########################################################
@@ -282,13 +292,13 @@ function Connect-Intune{
         [Parameter(Mandatory = $false)]
         [string]$SettingsFile = "$env:Temp\Settings.json",
 		[Parameter(Mandatory = $false)]
-        [string]$Scopes = "DeviceManagementApps.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All,DeviceManagementConfiguration.ReadWrite.All, Application.ReadWrite.All",
+        [string]$Scopes = "Application.ReadWrite.OwnedBy",
         [Parameter(Mandatory = $false)]
-        [string]$AppName = "Intune App Registration (Custom)",
+        [string]$AppName = "appreg-inune-BootMediaBuilder-Script-ReadWrite",
 		[Parameter(Mandatory = $false)]
-		[string[]]$ApplicationPermissions = "DeviceManagementApps.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, Application.ReadWrite.All",
+		[string[]]$ApplicationPermissions = "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All",
 		[Parameter(Mandatory = $false)]
-		[string[]]$DelegationPermissions = "User.Read.All"
+		[string[]]$DelegationPermissions = ""
 
     )
     If (Test-Path -Path $SettingsFile){
@@ -303,9 +313,35 @@ function Connect-Intune{
 		$SecureClientSecret = ConvertTo-SecureString -String $AppSecret -AsPlainText -Force
 		$ClientSecretCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $AppId, $SecureClientSecret
 		$null = Connect-MgGraph -TenantId $TenantID -ClientSecretCredential $ClientSecretCredential -NoWelcome
+
+    	#Test if Permissions are correct
+		$actscopes = (Get-MgContext | Select-Object -ExpandProperty Scopes).Split(" ")
+		$IncorrectScopes = ""
+		$AppPerms = $ApplicationPermissions.Split(",").Trim()
+		foreach ($AppPerm in $AppPerms) {
+			if ($actscopes -notcontains $AppPerm) {
+				$IncorrectScopes += $AppPerm -join ","
+			}
+		}
+		if ($IncorrectScopes) {
+			Write-Host "==========================================" -ForegroundColor Red
+			Write-Host " The following permissions are missing:" -ForegroundColor Red
+			Write-Host " $IncorrectScopes" -ForegroundColor Green
+			Write-Host " Make sure to grant admin consent to your " -ForegroundColor Red
+			Write-Host " API permissions in your newly created " -ForegroundColor Red
+			Write-Host " App registration !!! " -ForegroundColor Red
+			Write-Host "==========================================" -ForegroundColor Red
+			Write-Host "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade/quickStartType~/null/sourceType/Microsoft_AAD_IAM" -ForegroundColor Green
+			Write-Host $Error[0].ErrorDetails
+			Exit 1 
+		}
+		else{
+			Write-Host "MS-Graph scopes: $($actscopes -join ", ") are correct" -ForegroundColor Green
+		}
+
 		$ErrorActionPreference = "Stop"
 		try {
-			$null = Get-MgApplication 
+			$null = Get-MgDeviceAppManagement
 		}
 		catch {
 			Write-Host "==========================================" -ForegroundColor Red
@@ -345,18 +381,23 @@ function Connect-Intune{
 			}
 		}
 		# Define Application and Delegation Permission ids and type in a hash
-		$AppPermissions = $ApplicationPermissions.Split(",").Trim()
 		$permissions = [ordered]@{}
-		$PermID = ""
-		foreach($APermission in $AppPermissions){
-			$PermID = (Find-MgGraphPermission $APermission -PermissionType Application -ExactMatch).Id
-			$permissions.add($PermID,"Role")
+		If ($ApplicationPermissions){
+			$AppPermissions = $ApplicationPermissions.Split(",").Trim()
+			$PermID = ""
+			foreach($APermission in $AppPermissions){
+				$PermID = (Find-MgGraphPermission $APermission -PermissionType Application -ExactMatch).Id
+				$permissions.add($PermID,"Role")
+			}
 		}
-		$DelPermissions = $DelegationPermissions.Split(",").Trim()
-		$PermID = ""
-		foreach($DPermission in $DelPermissions){
-			$PermID = (Find-MgGraphPermission $DPermission -PermissionType Delegated -ExactMatch).Id
-			$permissions.add($PermID,"Scope")
+
+		If ($DelegationPermissions){
+			$DelPermissions = $DelegationPermissions.Split(",").Trim()
+			$PermID = ""
+			foreach($DPermission in $DelPermissions){
+				$PermID = (Find-MgGraphPermission $DPermission -PermissionType Delegated -ExactMatch).Id
+				$permissions.add($PermID,"Scope")
+			}
 		}
 
 		# Build the accessBody for the hash
@@ -388,7 +429,7 @@ function Connect-Intune{
 		}
 
 		$passwordCred = @{
-			"displayName" = "$($AppName)Secret"
+			"displayName" = "Secret-$($AppName)"
 			"endDateTime" = (Get-Date).AddMonths(+12)
 		}
 		$ClientSecret = Add-MgApplicationPassword -ApplicationId  $AppObj.ID -PasswordCredential $passwordCred
@@ -429,7 +470,6 @@ function Connect-Intune{
 	}
 }
 
-
 ###########################################################
 #	Main
 ###########################################################
@@ -441,11 +481,21 @@ If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Ad
 	Exit
 }
 
+# Check if the required modules are installed
+$modules =  'Microsoft.Graph.Authentication','Microsoft.Graph.Applications'
+$installed = @((Get-Module $modules -ListAvailable).Name | Select-Object -Unique)
+$notInstalled = Compare-Object $modules $installed -PassThru
+# At least one module is missing. Install the missing modules now.
+if ($notInstalled) { 
+	Write-Host "Installing required modules..." -ForegroundColor Yellow
+	Install-Module -Scope CurrentUser $notInstalled -Force -AllowClobber
+}
+
 Clear-Path
 
 #create Path environment create new workdir if "binschonda.txt" does not exist
 If (!(Test-Path -Path $TempFolder)) {
-	New-Item -ItemType Directory -Path $TempFolder
+	$null = New-Item -ItemType Directory -Path $TempFolder
 }
 $WorkPath = (Get-ChildItem -Path $TempFolder -Include binschonda.txt -File -Recurse -ErrorAction SilentlyContinue).DirectoryName
 If (([string]::IsNullOrEmpty($WorkPath))) {
@@ -453,7 +503,8 @@ If (([string]::IsNullOrEmpty($WorkPath))) {
 	$date = (get-date -format yyyyMMddmmss).ToString()
 	$TempPath = "$date-$random"
 	$WorkPath = "$TempFolder\$TempPath"
-	New-Item -ItemType Directory -Path $WorkPath
+	$null = New-Item -ItemType Directory -Path $WorkPath
+ 	Write-Host "Created an new work folder $WorkPath"
 }	
 
 #Add minimal Drivers from Repository
@@ -491,8 +542,8 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 Connect-Intune -SettingsFile "$TempFolder\Settings.json" -Scopes "Application.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All"
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
-
-#Ask dor media type to build
+$ProfileJSON | Set-Content -Encoding Ascii "$WorkPath\AutopilotConfigurationFile.json"
+#Ask for media type to build
 do {
 	$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
 } while ($MediaSelection -notin @('I', 'U'))
@@ -503,11 +554,42 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 	Exit
 } 
 
-If (!([string]::IsNullOrEmpty($DownloadISO))-and $MediaSelection -eq "I") {
-	If (!(Test-Path -Path "$ADKPath\Deployment Tools\DandISetEnv.bat")) {
-		Write-Host "No ADK has been found, installing it!"
-		winget install Microsoft.WindowsADK --version $ADKVersion
-		winget install Microsoft.ADKPEAddon --version $ADKVersion
+# Downloading ADK as we will need it for the components and oscdimg
+If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")) {
+	Write-Host "No ADK has been found, installing it!"
+	If ($ADKVersion){
+		winget install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+		winget install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+  	} 
+	Else{
+		winget install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+		winget install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+  	} 
+}
+
+
+# Create Wifi Profile (User can select a Profile)
+If ($AutocreateWifiProfile) {
+	$list=((netsh.exe wlan show profiles) -match ' : ')
+	If($list.Count -ne 0) {
+		$ProfileNames = $list.Split(":").Trim()
+		If ($list.Count -gt 1) {
+			For( $i = 1; $i -lt $ProfileNames.Count; $i +=2) {
+				Write-Host "[$(($i+1)/2)] $($ProfileNames[$i]) "
+			}
+			[int]$selection = Read-Host -Prompt "Select Profile Number"
+			$Index = $selection*2-1
+			$ProfileName = $ProfileNames[$Index] 
+		}
+		Else{
+			$ProfileName = $ProfileNames[0] 
+		}
+		Write-Host "Exporting $ProfileName" -ForegroundColor Green
+
+	}
+	else {
+		Write-Host "No Wifi Profile found!" -ForegroundColor Yellow
+		$ProfileName = ""
 	}
 }
 
@@ -525,16 +607,8 @@ If ([string]::IsNullOrEmpty($DownloadISO) ) {
 		}
 		Else {
 			$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
-			Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
-		}
-	}
-	Else {
-		$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
-		Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
-	}
-	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
-	# Make window visible again
-	Add-Type @"
+			# Make window visible again (this is sitting crooked, because PS needs it this way)
+			Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public class WinAPI {
@@ -543,8 +617,15 @@ public class WinAPI {
 	public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }
 "@
-	$hwnd = (Get-Process -Id $PID).MainWindowHandle
-	[WinAPI]::ShowWindow($hwnd, 1) | Out-Null
+			$hwnd = (Get-Process -Id $PID).MainWindowHandle
+			[WinAPI]::ShowWindow($hwnd, 1) | Out-Null
+		}
+	}
+	Else {
+		$DownloadISO = & "$WorkPath\Fido.ps1" -Ed $WindowsEdition -Lang $InstallLanguage -geturl
+		Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
+	}
+	Out-File -FilePath "$WorkPath\DownloadIso.txt" -InputObject $DownloadISO
 }
 
 #Download the ISO file if not already present
@@ -687,31 +768,19 @@ Else{
     copy-item $AutounattendFile "$InstMediaPath" -Force
 }
 
-#Create Wifi Profile (only the first Profile will be exported)
-If ($AutocreateWifiProfile) {
-	$list=((netsh.exe wlan show profiles) -match ' : ')
-	If($List.Count -ne 0) {
-		$ProfileName=$List.Split(":")[1].Trim()
-		$ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMediaPath\") -split """")[5]
-		$Name = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
-		$content = Get-Content "$InstMediaPath\Settings.ps1"
-		$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
-		$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
-		Set-Content "$InstMediaPath\Settings.ps1" -Value $content
-	}
-	else {
-		Write-Host "No Wifi Profile found!" -ForegroundColor Yellow
-	}
-}
-
-#Add the $TenantId, $AppId, $AppSecret in the Setting with the values from parameters
+#Add the Tenant & Wifi Settings to the Settings.ps1
+$ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMediaPath\") -split """")[5]
+$Name = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
+$Settings = Get-Content "$TempFolder\Settings.json" | ConvertFrom-Json
 $content = Get-Content "$InstMediaPath\Settings.ps1"
+$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
+$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "TenantId =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$TenantId = ""$TenantID""") 
+$content = $content.Replace( $line, "[string]`$TenantId  = ""$($Settings.TenantID)""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppId =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$AppId = ""$AppId""") 
+$content = $content.Replace( $line, "[string]`$AppId  = ""$($Settings.AppId)""") 
 $line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppSecret =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$AppSecret = ""$AppSecret""") 
+$content = $content.Replace( $line, "[string]`$AppSecret  = ""$($Settings.AppSecret)""") 
 Set-Content "$InstMediaPath\Settings.ps1" -Value $content
 
 
@@ -762,8 +831,10 @@ Switch ($MediaSelection) {
 	}
 	U {
 		$usbDrive = (Get-Disk | Where-Object Path -like '*usbstor*')
+        Write-Host "Formatting $($usbDrive.FriendlyName)" -ForegroundColor Red
+        Start-Sleep 5
 		$usbDriveNumber = $usbDrive.Number
-		Get-Partition $usbDriveNumber | Remove-Partition
+		Get-Partition $usbDriveNumber | Remove-Partition -Confirm:$false
 		If ($MultiParitionUSB) {
 			#rework this part, all Setup stuff has to go to I: !
 			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
@@ -781,10 +852,10 @@ Switch ($MediaSelection) {
 			Else {
 				New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			}
-			Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
+			$null = Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 			#Split the install.wim if greater 4GiB
 			If ((Get-Item $InstWimTemp).Length -gt 4294967295) {
-				Split-WindowsImage -ImagePath "$InstWimTemp" -SplitImagePath $InstallSWMFile -FileSize 4096 -CheckIntegrity
+				$null = Split-WindowsImage -ImagePath "$InstWimTemp" -SplitImagePath $InstallSWMFile -FileSize 4096 -CheckIntegrity
 				Remove-Item "$InstWimTemp" -Force
 			}
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P:" -Wait -NoNewWindow
@@ -793,8 +864,6 @@ Switch ($MediaSelection) {
 	}
 }
 $EndTime = Get-Date
-Write-Host $startTime
-Write-Host $EndTime
 $time = $EndTime - $startTime
 Write-Host "It Took $($time.Hours)h:$($time.Minutes)m:$($time.Seconds)s to Build this Media" -ForegroundColor Magenta
 Write-Host "We are done!" -ForegroundColor Green
