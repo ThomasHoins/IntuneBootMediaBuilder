@@ -144,7 +144,7 @@ Param (
 	[string]$TenantID,
 	[string]$AppId,
 	[string]$AppSecret,
-	[string]$ProfileID = "0b38e470-832e-427e-9f02-e28fb5387421"
+	[string]$ProfileID = 4ea72baa-ff3a-45c3-96d4-1aca14a72899" # "0b38e470-832e-427e-9f02-e28fb5387421"
 )	
 
 ###########################################################
@@ -815,7 +815,7 @@ Switch ($MediaSelection) {
 			#Split the install.wim if greater 4GiB
 			If ((Get-Item $InstWimTemp).Length -gt 4294967295) {
 				$null = Split-WindowsImage -ImagePath "$InstWimTemp" -SplitImagePath $InstallSWMFile -FileSize 4096 -CheckIntegrity
-				$null = Remove-Item "$InstWimTemp" -Force
+				Remove-Item "$InstWimTemp" -Force
 			}
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P:" -Wait -NoNewWindow
 		}
