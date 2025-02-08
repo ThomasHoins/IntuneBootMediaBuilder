@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.2.1
+	Version:		1.3.0
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -35,6 +35,7 @@
 					"Organization.Read.All",
 					"User.Read.All"
 	Changes: 		07.02.2025 added a scope check for the permissions	
+	Changes: 		07.02.2025 addecd Autopilot Profile Selection if no ID is provided
 
 
 .LINK
@@ -154,7 +155,7 @@ Param (
 	[string]$TenantID,
 	[string]$AppId,
 	[string]$AppSecret,
-	[string]$ProfileID = "4ea72baa-ff3a-45c3-96d4-1aca14a72899" # "0b38e470-832e-427e-9f02-e28fb5387421"
+	[string]$ProfileID		# "4ea72baa-ff3a-45c3-96d4-1aca14a72899" # "0b38e470-832e-427e-9f02-e28fb5387421"
 )	
 
 ###########################################################
@@ -176,15 +177,6 @@ function Get-IntuneJson() {
 	<#
 	.SYNOPSIS
 	Gets the Intune Profile and converts it to JSON
-	
-	.DESCRIPTION
-	Input the Profile ID and get back the JSON to include to you installation
-	
-	.PARAMETER id
-	Specifies the Profile ID to use for the installation
-
-	.EXAMPLE
-	Get-IntuneJson -id $ID
 
 	.Notes
 	Extracted  from here:
@@ -196,12 +188,27 @@ function Get-IntuneJson() {
 		[string]$id
 	)
 	
-	# Defining Variables
+	# get the Autopilot profile
 	$graphApiVersion = "beta"
-	$uri = "https://graph.microsoft.com/$graphApiVersion/deviceManagement/windowsAutopilotDeploymentProfiles/$id"
-	$approfile = Invoke-MGGraphRequest -Uri $uri -Method Get -OutputType PSObject
-	
-	Get-MgContext
+	If ([string]::IsNullOrEmpty($id)) {
+		$uri = "https://graph.microsoft.com/$graphApiVersion/deviceManagement/windowsAutopilotDeploymentProfiles/"
+		$approfiles = (Invoke-MGGraphRequest -Uri $uri -Method Get -OutputType PSObject).value
+		Write-Host "Select the Autopilot Profile to use:"
+		$i = 0
+		ForEach($approfile in $approfiles) {
+			Write-Host "[$i] $($approfile.displayName)"
+			$i++
+		}
+		[int]$selection = Read-Host "Select Profile Number"
+		$approfile = $approfiles[$selection]
+		Write-Host "Selected $($approfile.displayName)"
+	}
+	Else {
+		$uri = "https://graph.microsoft.com/$graphApiVersion/deviceManagement/windowsAutopilotDeploymentProfiles/$id"
+		$approfile = (Invoke-MGGraphRequest -Uri $uri -Method Get -OutputType PSObject)
+		Write-Host "Selected $($approfile.displayName)"
+	}
+
 	# Set the org-related info
 	$script:TenantOrg = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/organization" -OutputType PSObject).value
 	foreach ($domain in $script:TenantOrg.VerifiedDomains) {
@@ -539,7 +546,7 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
 }
 
-Connect-Intune -SettingsFile "$TempFolder\Settings.json" -Scopes "Application.ReadWrite.All, DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All" -ApplicationPermissions "DeviceManagementConfiguration.ReadWrite.All, DeviceManagementServiceConfig.ReadWrite.All, Directory.ReadWrite.All, Directory.Read.All, Organization.ReadWrite.All, User.Read.All"
+Connect-Intune -SettingsFile "$TempFolder\appreg-inune-BootMediaBuilder-Script-ReadWrite-Prod.json" -Scopes "Application.ReadWrite.All" -ApplicationPermissions "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All"
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 $ProfileJSON | Set-Content -Encoding Ascii "$WorkPath\AutopilotConfigurationFile.json"
