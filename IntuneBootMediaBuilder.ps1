@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.0
+	Version:		1.3.1
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -36,6 +36,7 @@
 					"User.Read.All"
 	Changes: 		07.02.2025 added a scope check for the permissions	
 	Changes: 		07.02.2025 addecd Autopilot Profile Selection if no ID is provided
+	Changes: 		10.02.2025 Changed the files to json and added a input for the Group Tag
 
 
 .LINK
@@ -75,7 +76,7 @@ There is an excellent online generator for that file.
 
 .PARAMETER ADKPath
 Specifies the installation path of the Windows ADK. If the ADK is not installed, it will be downloaded and installed automatically.
-The ADK will only be used if an ISO file is created or if you select a custom install image with the `-DownloadISO` parameter.
+The ADK will be used for the add ons and if an ISO file is created or if you select a custom install image with the `-DownloadISO` parameter.
 
 .PARAMETER ADKVersion
 Specifies the version of the Windows ADK to be installed. The default is `10.1.22621.1`. This version should match the version of the installed operating system.
@@ -297,7 +298,7 @@ function Connect-Intune{
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $false)]
-        [string]$SettingsFile = "$env:Temp\Settings.json",
+        [string]$SecretFile = "$env:Temp\Settings.json",
 		[Parameter(Mandatory = $false)]
         [string]$Scopes = "Application.ReadWrite.OwnedBy",
         [Parameter(Mandatory = $false)]
@@ -308,13 +309,12 @@ function Connect-Intune{
 		[string[]]$DelegationPermissions = ""
 
     )
-    If (Test-Path -Path $SettingsFile){
+    If (Test-Path -Path $SecretFile){
 		Write-Host "Reading Settings file..." -ForegroundColor Yellow
-		Get-Content -Path $SettingsFile | ConvertFrom-Json | ForEach-Object {
-			$TenantID = $_.TenantID
-			$AppID = $_.AppID
-			$AppSecret = $_.AppSecret
-		}
+		$SecretSettings = Get-Content -Path $SecretFile | ConvertFrom-Json
+		$TenantID = $SecretSettings.TenantID
+		$AppID = $SecretSettings.AppID
+		$AppSecret = $SecretSettings.AppSecret
 		Write-Host "Settings file read successfully." -ForegroundColor Green
 		Write-Host "Using App Secret to connect to Tenant: $TenantID" -ForegroundColor Green
 		$SecureClientSecret = ConvertTo-SecureString -String $AppSecret -AsPlainText -Force
@@ -451,17 +451,18 @@ function Connect-Intune{
 		}
 
 		#Update Settings file with gathered information
-		$Settings = [ordered]@{
-			_Comment1 = "Make sure to keep this secret safe. This secret can be used to connect to your tenant!"
-			_Comment2 = "The following permissions are granted with this secret"
-			_Comment3 = $AppPermissions,$DelPermissions
+		$SecretSettings = [ordered]@{
+			Comment1 = "Make sure to keep this secret safe. This secret can be used to connect to your tenant!"
+			Comment2 = "The following permissions are granted with this secret:"
+			ApplicationPermissions = $ApplicationPermissions
+			DelegationPermissions = $DelegationPermissions
 			AppName = $AppObj.DisplayName
 			CreatedBy = $TenantData.Account
 			TenantID = $TenantID
 			AppID = $AppID
 			AppSecret = $AppSecret
 		}
-		Out-File -FilePath $SettingsFile -InputObject ($Settings | ConvertTo-Json)
+		Out-File -FilePath $SecretFile -InputObject ($SecretSettings | ConvertTo-Json)
 
 		Write-Host ""
 		Write-Host "==========================================================" -ForegroundColor Red
@@ -479,6 +480,10 @@ function Connect-Intune{
 
 ###########################################################
 #	Main
+###########################################################
+
+###########################################################
+#region	Preparations
 ###########################################################
 
 $startTime = Get-Date
@@ -574,6 +579,11 @@ If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")
   	} 
 }
 
+#Set a Group Tag for the Device
+$GroupTag = Read-Host "Enter a Group Tag for the Device (Default: "Default")" 
+If([string]::IsNullOrEmpty($GroupTag)){
+	$GroupTag = "Default"
+}
 
 # Create Wifi Profile (User can select a Profile)
 If ($AutocreateWifiProfile) {
@@ -599,9 +609,10 @@ If ($AutocreateWifiProfile) {
 		$ProfileName = ""
 	}
 }
+#endregion
 
 ###########################################################
-#	Downloading Installation Media
+#region	Downloading Installation Media
 ###########################################################
 
 #Get FIDO and download Windows 11 installation ISO
@@ -667,9 +678,10 @@ Else {
 	Clear-Path
 	exit 1
 }
+#endregion
 
 ###########################################################
-#	Preparing Boot Image
+#region	Preparing Boot Image
 ###########################################################
 
 Write-Host "Preparing Boot Image"
@@ -732,9 +744,10 @@ $null = Add-Content -Path "$BootPath\Windows\System32\startnet.cmd" -Value $star
 
 # Unmount Boot Image
 $null = Dismount-WindowsImage -Path $BootPath -Save
+#endregion
 
 ###########################################################
-#	Prepareing Install Image
+#region	Prepareing Install Image
 ###########################################################
 
 Write-Host "Preparing Install Image"
@@ -777,26 +790,38 @@ Else{
 
 #Add the Tenant & Wifi Settings to the Settings.ps1
 $ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMediaPath\") -split """")[5]
-$Name = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
-$Settings = Get-Content "$TempFolder\Settings.json" | ConvertFrom-Json
-$content = Get-Content "$InstMediaPath\Settings.ps1"
-$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
-$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "TenantId =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$TenantId  = ""$($Settings.TenantID)""") 
-$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppId =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$AppId  = ""$($Settings.AppId)""") 
-$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppSecret =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$AppSecret  = ""$($Settings.AppSecret)""") 
-Set-Content "$InstMediaPath\Settings.ps1" -Value $content
+$WifiName = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
 
+#Update Settings file with gathered information
+$SettingsFile = "$InstMediaPath\Settings.json"
+$Settings = [ordered]@{
+	Wifi = $WifiName
+	GroupTag = $GroupTag
+	Comment1 = "[Assign] Wait for the Group Tag to be assigned before continuing"
+	Assign = $false
+	Comment2 = "[AssignedUser] Fill in the UPN of the user who will be assigned to the device"
+	AssignedUser = ""
+	Comment3 = "[OutputFile] If you want to output the hardware hash somewhere, put a path here"
+	OutputFile = ""
+	ApplicationPermissions = $ApplicationPermissions
+	DelegationPermissions = $DelegationPermissions
+	AppName = $AppObj.DisplayName
+	CreatedBy = $TenantData.Account
+	TenantID = $TenantID
+	AppID = $AppID
+	AppSecret = $AppSecret
+}
+Out-File -FilePath $SettingsFile -InputObject ($Settings | ConvertTo-Json)
+
+
+
+#endregion
 
 ###########################################################
-#	Creating Installation Media
+#region	Creating Installation Media
 ###########################################################
 
 #Create Media
-
 Switch ($MediaSelection) {
 	I {
 		#"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe" -bootdata:2#p0,e,b"$PEPath\fwfiles\etfsboot.com"#pEF,e,b"$PEPath\fwfiles\efisys.bin" -u1 -udfver102 "$InstMediaPath" "$IsoFileName"
@@ -874,3 +899,5 @@ $EndTime = Get-Date
 $time = $EndTime - $startTime
 Write-Host "It Took $($time.Hours)h:$($time.Minutes)m:$($time.Seconds)s to Build this Media" -ForegroundColor Magenta
 Write-Host "We are done!" -ForegroundColor Green
+
+#endregion

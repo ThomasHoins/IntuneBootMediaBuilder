@@ -63,7 +63,7 @@ PS> WindowsAutoPilotInfo.ps1 -Settings D:\Settings.ps1
 param(
     [Parameter(Mandatory = $False)] [String] $GroupTag = "",
     [Parameter(Mandatory = $False)] [String] $AssignedUser = "",
-    [Parameter(Mandatory = $False)] [String] $Settings = ".\Settings.ps1", #Default location
+    [Parameter(Mandatory = $False)] [String] $Settings = ".\Settings.json", #Default location
     [Parameter(Mandatory = $False)] [String] $Wifi = "",
     [Parameter(Mandatory = $False)] [String] $TenantId = "",
     [Parameter(Mandatory = $False)] [String] $AppId = "",
@@ -72,13 +72,12 @@ param(
 
 )
 
-
 Begin {
 
     # Check if the Settings is defined and the file exists
     if ($Settings -and (Test-Path $Settings)) {
         # Dot-source the Auth.ps1 script to load variables into the current scope
-        . $Settings
+        Get-Content $Settings | ConvertFrom-Json | ForEach-Object { Set-Variable -Name $_.Name -Value $_.Value }
         Write-Host "Settings.ps1 loaded." -ForegroundColor Green
     }
     else {
@@ -155,7 +154,7 @@ Begin {
         Start-Sleep 30
     }
 
-    #region App-based authentication
+    #region Functions
     Function Connect-MSGraphApp {
         [cmdletbinding()]
         param
@@ -179,9 +178,7 @@ Begin {
         }
     }
 
-    #region Core methods
-
-    Function Get-AutopilotDevice() {
+    Function Get-AutopilotDevice {
         [cmdletbinding()]
         param
         (
@@ -191,7 +188,6 @@ Begin {
         )
 
         Process {
-
             # Defining Variables
             $graphApiVersion = "beta"
             $Resource = "deviceManagement/windowsAutopilotDeviceIdentities"
@@ -199,17 +195,17 @@ Begin {
                 Authorization = "$($graph.token_type) $($graph.access_token)"
             }
             if ($id -and $expand) {
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$($id)?`$expand=deploymentProfile,intendedDeploymentProfile"
+                $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource/$($id)?`$expand=deploymentProfile,intendedDeploymentProfile"
             }
             elseif ($id) {
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)/$id"
+                $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource/$id"
             }
             elseif ($serial) {
                 $encoded = [uri]::EscapeDataString($serial)
                 $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?`$filter=contains(serialNumber,'$encoded')"
             }
             else {
-                $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
+                $uri = "https://graph.microsoft.com/$graphApiVersion/$Resource"
             }
 
             Write-Verbose "GET $uri"
@@ -244,8 +240,7 @@ Begin {
         }
     }
 
-
-    Function Get-AutopilotImportedDevice() {
+    Function Get-AutopilotImportedDevice {
         [cmdletbinding()]
         param
         (
@@ -273,15 +268,12 @@ Begin {
             }
             else {
                 $devices = $response.value
-    
                 $devicesNextLink = $response."@odata.nextLink"
-    
                 while ($null -ne $devicesNextLink) {
                     $devicesResponse = (Invoke-RestMethod -Uri $devicesNextLink -Method Get -Headers $headers)
                     $devicesNextLink = $devicesResponse."@odata.nextLink"
                     $devices += $devicesResponse.value
                 }
-    
                 $devices
             }
         }
@@ -292,7 +284,7 @@ Begin {
 
     }
 
-    Function Add-AutopilotImportedDevice() {
+    Function Add-AutopilotImportedDevice {
         [cmdletbinding()]
         param
         (
@@ -352,11 +344,9 @@ Begin {
             $headers = @{
                 Authorization = "$($graph.token_type) $($graph.access_token)"
             }
-    
             $body = New-Object PSObject -Property @{
                 groupTag = $GroupTag
             }
-    
             $postSplat = @{
                 Method = "Post"
                 Uri = "https://graph.microsoft.com/$GraphVersion/deviceManagement/windowsAutopilotDeviceIdentities/$Id/UpdateDeviceProperties"
@@ -364,15 +354,11 @@ Begin {
                 ContentType = "application/json"
                 Body = $body | ConvertTo-Json
             }
-            
             $post = Invoke-RestMethod @postSplat
-    
             return $post
         }
-}
-
-
-
+    }
+    #endregion
     
     # Initialize empty list
     $computers = @()
@@ -385,8 +371,6 @@ Begin {
     else {
         Write-Host "Could not connect to Intune. Check settings.ps1." -ForegroundColor Red
     }
-
-	
 }
 
 Process {
@@ -428,8 +412,6 @@ Process {
     Write-Host "Gathered details for device with serial number: $serial"
 
     Remove-CimSession $session
-
-
 }
 
 End {
@@ -515,7 +497,7 @@ End {
                 $autopilotDevices += $device
             }	
         }
-        Write-Host "Waiting for device to be synced"
+        Write-Host "Waiting for device to be synced to Intune"
         if ($processingCount -gt 0) {
             Start-Sleep 30
         }
