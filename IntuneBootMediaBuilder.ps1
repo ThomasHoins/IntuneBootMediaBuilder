@@ -1,4 +1,42 @@
 <#
+Die Winget Installation des ADK muss angepasst werden. und die Settings Json bleibt leer
+Die WLAN Profile klappen nicht wenn leer
+######################################################
+$pInfo = [Diagnostics.ProcessStartInfo]::new()
+$pInfo = @{
+    FileName               = 'cmd.exe'
+    Arguments              = '/c whoami & whoami /bogus & timeout 2 & exit 1'
+    UseShellExecute        = $false
+    RedirectStandardError  = $true
+    RedirectStandardOutput = $true
+}
+
+$process = [Diagnostics.Process]::new()
+$process.StartInfo = $pInfo
+[void] $process.Start()
+
+$stdOut = $process.StandardOutput.ReadToEndAsync()
+$stdErr = $process.StandardError.ReadToEndAsync()
+
+$process.WaitForExit()
+
+$stdOut.Result
+$stdErr.Result
+$process.ExitCode
+
+#########################################################
+
+oder einfacher so: 
+
+$process = Start-Process -FilePath "cmd.exe" -ArgumentList '/c whoami /bogus' -Wait -PassThru
+
+
+Write-Host "Error: $($process.ExitCode)"
+
+#########################################################
+
+
+
 .SYNOPSIS
 	Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
 
@@ -551,7 +589,7 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
 }
 
-Connect-Intune -SettingsFile "$TempFolder\appreg-inune-BootMediaBuilder-Script-ReadWrite-Prod.json" -Scopes "Application.ReadWrite.All" -ApplicationPermissions "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All"
+Connect-Intune -SecretFile "$PSScriptRoot\appreg-intune-BootMediaBuilder-Script-ReadWrite-Prod.json" -Scopes "Application.ReadWrite.All" -ApplicationPermissions "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All"
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 $ProfileJSON | Set-Content -Encoding Ascii "$WorkPath\AutopilotConfigurationFile.json"
@@ -588,7 +626,7 @@ If([string]::IsNullOrEmpty($GroupTag)){
 # Create Wifi Profile (User can select a Profile)
 If ($AutocreateWifiProfile) {
 	$list=((netsh.exe wlan show profiles) -match ' : ')
-	If($list.Count -ne 0) {
+	If($list -ne "false") {
 		$ProfileNames = $list.Split(":").Trim()
 		If ($list.Count -gt 1) {
 			For( $i = 1; $i -lt $ProfileNames.Count; $i +=2) {
