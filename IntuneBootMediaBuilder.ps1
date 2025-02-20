@@ -162,10 +162,11 @@ Param (
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion,	#  "10.1.22621.1"
+	[string]$SecretFile = "$PSScriptRoot\appreg-intune-BootMediaBuilder-Script-ReadWrite-Prod.json",
 	[string]$TenantID,
 	[string]$AppId,
 	[string]$AppSecret,
-	[string]$ProfileID		# "4ea72baa-ff3a-45c3-96d4-1aca14a72899" # "0b38e470-832e-427e-9f02-e28fb5387421"
+	[string]$ProfileID	
 )	
 
 ###########################################################
@@ -506,6 +507,7 @@ If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Ad
 $modules =  'Microsoft.Graph.Authentication','Microsoft.Graph.Applications'
 $installed = @((Get-Module $modules -ListAvailable).Name | Select-Object -Unique)
 $notInstalled = Compare-Object $modules $installed -PassThru
+
 # At least one module is missing. Install the missing modules now.
 if ($notInstalled) { 
 	Write-Host "Installing required modules..." -ForegroundColor Yellow
@@ -560,10 +562,12 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
 }
 
-Connect-Intune -SecretFile "$PSScriptRoot\appreg-intune-BootMediaBuilder-Script-ReadWrite-Prod.json" -Scopes "Application.ReadWrite.All" -ApplicationPermissions "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All"
+# Connect to Graph
+Connect-Intune -SecretFile $SecretFile -Scopes "Application.ReadWrite.All" -ApplicationPermissions "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All"
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 $ProfileJSON | Set-Content -Encoding Ascii "$WorkPath\AutopilotConfigurationFile.json"
+
 #Ask for media type to build
 do {
 	$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
@@ -581,20 +585,25 @@ If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")
  $process = Start-Process -FilePath "cmd.exe" -ArgumentList '/c whoami /bogus' -Wait -PassThru
 
 
-Write-Host "Error: $($process.ExitCode)"
-	$Error= $false
+
+	$ErrorID= $false
 	If ($ADKVersion){
 		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-  		If($process.ExitCode -ne 0) {$Error= $true} 
+  		If($process.ExitCode -ne 0) {$ErrorID= $true} 
     		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-      		If($process.ExitCode -ne 0) {$Error= $true} 
+      		If($process.ExitCode -ne 0) {$ErrorID= $true} 
   	} 
 	Else{
   		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-  		If($process.ExitCode -ne 0) {$Error= $true} 
+  		If($process.ExitCode -ne 0) {$ErrorID= $true} 
     		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-      		If($process.ExitCode -ne 0) {$Error= $true} 
+      		If($process.ExitCode -ne 0) {$ErrorID= $true} 
   	} 
+}
+If ($ErrorID) {
+	Write-Host "Failed to install the ADK. Exiting"
+	Write-Host "Please install the ADK manually and try again."
+	Exit 1	
 }
 
 #Set a Group Tag for the Device
