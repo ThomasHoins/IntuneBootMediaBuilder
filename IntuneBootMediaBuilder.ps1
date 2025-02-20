@@ -1,38 +1,8 @@
 <#
-Die Winget Installation des ADK muss angepasst werden. und die Settings Json bleibt leer
-Die WLAN Profile klappen nicht wenn leer
+##Die Winget Installation des ADK muss angepasst werden. und die Settings Json bleibt leer
+##Die WLAN Profile klappen nicht wenn leer
 Das Installieren der erforderlichen Module sollte auch noch integriert werden.
-######################################################
-$pInfo = [Diagnostics.ProcessStartInfo]::new()
-$pInfo = @{
-    FileName               = 'cmd.exe'
-    Arguments              = '/c whoami & whoami /bogus & timeout 2 & exit 1'
-    UseShellExecute        = $false
-    RedirectStandardError  = $true
-    RedirectStandardOutput = $true
-}
 
-$process = [Diagnostics.Process]::new()
-$process.StartInfo = $pInfo
-[void] $process.Start()
-
-$stdOut = $process.StandardOutput.ReadToEndAsync()
-$stdErr = $process.StandardError.ReadToEndAsync()
-
-$process.WaitForExit()
-
-$stdOut.Result
-$stdErr.Result
-$process.ExitCode
-
-#########################################################
-
-oder einfacher so: 
-
-$process = Start-Process -FilePath "cmd.exe" -ArgumentList '/c whoami /bogus' -Wait -PassThru
-
-
-Write-Host "Error: $($process.ExitCode)"
 
 #########################################################
 
@@ -608,13 +578,22 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 # Downloading ADK as we will need it for the components and oscdimg
 If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")) {
 	Write-Host "No ADK has been found, installing it!"
+ $process = Start-Process -FilePath "cmd.exe" -ArgumentList '/c whoami /bogus' -Wait -PassThru
+
+
+Write-Host "Error: $($process.ExitCode)"
+	$Error= $false
 	If ($ADKVersion){
-		winget install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
-		winget install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+  		If($process.ExitCode -ne 0) {$Error= $true} 
+    		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+      		If($process.ExitCode -ne 0) {$Error= $true} 
   	} 
 	Else{
-		winget install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
-		winget install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+  		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+  		If($process.ExitCode -ne 0) {$Error= $true} 
+    		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+      		If($process.ExitCode -ne 0) {$Error= $true} 
   	} 
 }
 
