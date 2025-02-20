@@ -1,6 +1,7 @@
 <#
 Die Winget Installation des ADK muss angepasst werden. und die Settings Json bleibt leer
 Die WLAN Profile klappen nicht wenn leer
+Das Installieren der erforderlichen Module sollte auch noch integriert werden.
 ######################################################
 $pInfo = [Diagnostics.ProcessStartInfo]::new()
 $pInfo = @{
