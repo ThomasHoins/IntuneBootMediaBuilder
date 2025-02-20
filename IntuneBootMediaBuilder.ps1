@@ -627,7 +627,7 @@ If([string]::IsNullOrEmpty($GroupTag)){
 # Create Wifi Profile (User can select a Profile)
 If ($AutocreateWifiProfile) {
 	$list=((netsh.exe wlan show profiles) -match ' : ')
-	If($list -ne "false") {
+	If($list) {
 		$ProfileNames = $list.Split(":").Trim()
 		If ($list.Count -gt 1) {
 			For( $i = 1; $i -lt $ProfileNames.Count; $i +=2) {
