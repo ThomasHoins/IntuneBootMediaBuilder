@@ -1,13 +1,4 @@
 <#
-##Die Winget Installation des ADK muss angepasst werden. und die Settings Json bleibt leer
-##Die WLAN Profile klappen nicht wenn leer
-Das Installieren der erforderlichen Module sollte auch noch integriert werden.
-
-
-#########################################################
-
-
-
 .SYNOPSIS
 	Creates a bootable USB media or ISO file using the Windows ADK Preinstallation Environment (PE).
 
@@ -25,7 +16,7 @@ Das Installieren der erforderlichen Module sollte auch noch integriert werden.
 
 .NOTES
 
-	Version:		1.3.1
+	Version:		1.3.2
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -46,6 +37,7 @@ Das Installieren der erforderlichen Module sollte auch noch integriert werden.
 	Changes: 		07.02.2025 added a scope check for the permissions	
 	Changes: 		07.02.2025 addecd Autopilot Profile Selection if no ID is provided
 	Changes: 		10.02.2025 Changed the files to json and added a input for the Group Tag
+	Changes: 		20.02.2025 Minor changes in the script, added a check for the ADK installation
 
 
 .LINK
