@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.2
+	Version:		1.3.3
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -38,6 +38,7 @@
 	Changes: 		07.02.2025 addecd Autopilot Profile Selection if no ID is provided
 	Changes: 		10.02.2025 Changed the files to json and added a input for the Group Tag
 	Changes: 		20.02.2025 Minor changes in the script, added a check for the ADK installation
+	Changes: 		21.02.2025 Changed the Settings file to a JSON file
 
 
 .LINK
@@ -492,7 +493,7 @@ $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))) {
 	Write-Host "Admin permissions required!"
-	Exit
+	#Exit
 }
 
 # Check if the required modules are installed
@@ -574,28 +575,25 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 # Downloading ADK as we will need it for the components and oscdimg
 If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")) {
 	Write-Host "No ADK has been found, installing it!"
- $process = Start-Process -FilePath "cmd.exe" -ArgumentList '/c whoami /bogus' -Wait -PassThru
-
-
-
 	$ErrorID= $false
 	If ($ADKVersion){
 		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
   		If($process.ExitCode -ne 0) {$ErrorID= $true} 
-    		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-      		If($process.ExitCode -ne 0) {$ErrorID= $true} 
+    	$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+      	If($process.ExitCode -ne 0) {$ErrorID= $true} 
   	} 
 	Else{
   		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
   		If($process.ExitCode -ne 0) {$ErrorID= $true} 
-    		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-      		If($process.ExitCode -ne 0) {$ErrorID= $true} 
+    	$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+      	If($process.ExitCode -ne 0) {$ErrorID= $true} 
   	} 
-}
-If ($ErrorID) {
-	Write-Host "Failed to install the ADK. Exiting"
-	Write-Host "Please install the ADK manually and try again."
-	Exit 1	
+
+	If ($ErrorID) {
+		Write-Host "Failed to install the ADK. Exiting"
+		Write-Host "Please install the ADK manually and try again."
+		Exit 1	
+	}
 }
 
 #Set a Group Tag for the Device
@@ -621,7 +619,6 @@ If ($AutocreateWifiProfile) {
 			$ProfileName = $ProfileNames[0] 
 		}
 		Write-Host "Exporting $ProfileName" -ForegroundColor Green
-
 	}
 	else {
 		Write-Host "No Wifi Profile found!" -ForegroundColor Yellow
@@ -796,7 +793,7 @@ Remove-Item $InstWimTemp -Force
 Rename-Item $InstWimDest $InstWimTemp
 
 #Add Installation Files to $InstMediaPath
-Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Settings.ps1" -Outfile "$InstMediaPath\Settings.ps1"
+#Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Settings.ps1" -Outfile "$InstMediaPath\Settings.ps1"
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/UploadAutopilotInfo.ps1" -Outfile "$InstMediaPath\UploadAutopilotInfo.ps1"
 
 # If a $AutounattendFile is supplied, use that, else download it
@@ -812,6 +809,14 @@ $ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMed
 $WifiName = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
 
 #Update Settings file with gathered information
+If (Test-Path -Path $SecretFile){
+	Write-Host "Reading Settings file..." -ForegroundColor Yellow
+	$SecretSettings = Get-Content -Path $SecretFile | ConvertFrom-Json
+	$TenantID = $SecretSettings.TenantID
+	$AppID = $SecretSettings.AppID
+	$AppSecret = $SecretSettings.AppSecret
+}
+
 $SettingsFile = "$InstMediaPath\Settings.json"
 $Settings = [ordered]@{
 	Wifi = $WifiName
@@ -822,10 +827,7 @@ $Settings = [ordered]@{
 	AssignedUser = ""
 	Comment3 = "[OutputFile] If you want to output the hardware hash somewhere, put a path here"
 	OutputFile = ""
-	ApplicationPermissions = $ApplicationPermissions
-	DelegationPermissions = $DelegationPermissions
 	AppName = $AppObj.DisplayName
-	CreatedBy = $TenantData.Account
 	TenantID = $TenantID
 	AppID = $AppID
 	AppSecret = $AppSecret

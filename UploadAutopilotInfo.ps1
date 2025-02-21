@@ -69,23 +69,17 @@ param(
     [Parameter(Mandatory = $False)] [String] $AppId = "",
     [Parameter(Mandatory = $False)] [String] $AppSecret = "",
     [Parameter(Mandatory = $False)] [String] $Assign = ""
-
 )
 
+
 Begin {
-
-    # Check if the Settings is defined and the file exists
-    if ($Settings -and (Test-Path $Settings)) {
-        # Dot-source the Auth.ps1 script to load variables into the current scope
-        Get-Content $Settings | ConvertFrom-Json | ForEach-Object { Set-Variable -Name $_.Name -Value $_.Value }
-        Write-Host "Settings.ps1 loaded." -ForegroundColor Green
-    }
-    else {
-        Write-Host "Settings.ps1 file could not be found, check path." -ForegroundColor Red
-        Start-Sleep 5
-    }
-
+    #region Functions
     Function Connect-Wifi {
+        [cmdletbinding()]
+        param
+        (
+            [Parameter(Mandatory = $false)] [string]$Wifi
+        )
         if ($Wifi) {
             # Get all logical drives on the system (both fixed and removable)
             $drives = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 2 -or $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
@@ -124,37 +118,6 @@ Begin {
             }
         }
     }
-
-    # Check if there is an active wired or Wi-Fi connection
-    $wiredConnection = Get-NetAdapter | Where-Object { $_.Name -like 'Ethernet*' -and $_.Status -eq 'Up' }
-    $wifiConnection = Get-NetAdapter | Where-Object { $_.Name -like 'Wi-Fi*' -and $_.Status -eq 'Up' }
-
-    if ($wiredConnection -or $wifiConnection) {
-        Write-Host "An active network connection is already present."
-    }
-    else {
-        Write-Host "No active network connection detected. Trying to connect to WiFi..."
-
-        $service = Get-Service -Name WlanSvc
-
-        if ($service.Status -eq 'Running') {
-            Write-Host "WLAN AutoConfig service is running."
-        }
-        else {
-            Write-Host "WLAN AutoConfig service is not running. Let's start the service..."
-            Start-Service WlanSvc
-        }
-
-        # Connect to WiFi
-        Connect-Wifi
-    }
-
-    While (!(Test-Connection graph.microsoft.com -ErrorAction SilentlyContinue -Quiet)){
-        Write-Host "No Internet connection. Make sure to connect to a network with Internet connction" -ForegroundColor Red
-        Start-Sleep 30
-    }
-
-    #region Functions
     Function Connect-MSGraphApp {
         [cmdletbinding()]
         param
@@ -177,7 +140,6 @@ Begin {
             return $connection
         }
     }
-
     Function Get-AutopilotDevice {
         [cmdletbinding()]
         param
@@ -239,7 +201,6 @@ Begin {
             }
         }
     }
-
     Function Get-AutopilotImportedDevice {
         [cmdletbinding()]
         param
@@ -283,7 +244,6 @@ Begin {
         }
 
     }
-
     Function Add-AutopilotImportedDevice {
         [cmdletbinding()]
         param
@@ -331,7 +291,6 @@ Begin {
         }
     
     }
-
     Function Set-AutoPilotDeviceGroupTag {
         [cmdletbinding()]
         param(   
@@ -359,6 +318,46 @@ Begin {
         }
     }
     #endregion
+
+    # Check if the Settings is defined and the file exists
+    if ($Settings -and (Test-Path $Settings)) {
+        # Dot-source the Auth.ps1 script to load variables into the current scope
+        Get-Content $Settings | ConvertFrom-Json | ForEach-Object { Set-Variable -Name $_.Name -Value $_.Value }
+        Write-Host "$Settings loaded." -ForegroundColor Green
+    }
+    else {
+        Write-Host "$Settings file could not be found, check path." -ForegroundColor Red
+        Start-Sleep 5
+    }
+
+    # Check if there is an active wired or Wi-Fi connection
+    $wiredConnection = Get-NetAdapter | Where-Object { $_.Name -like 'Ethernet*' -and $_.Status -eq 'Up' }
+    $wifiConnection = Get-NetAdapter | Where-Object { $_.Name -like 'Wi-Fi*' -and $_.Status -eq 'Up' }
+
+    if ($wiredConnection -or $wifiConnection) {
+        Write-Host "An active network connection is already present."
+    }
+    else {
+        Write-Host "No active network connection detected. Trying to connect to WiFi..."
+
+        $service = Get-Service -Name WlanSvc
+
+        if ($service.Status -eq 'Running') {
+            Write-Host "WLAN AutoConfig service is running."
+        }
+        else {
+            Write-Host "WLAN AutoConfig service is not running. Let's start the service..."
+            Start-Service WlanSvc
+        }
+
+        # Connect to WiFi
+        Connect-Wifi $Wifi
+    }
+
+    While (!(Test-Connection graph.microsoft.com -ErrorAction SilentlyContinue -Quiet)){
+        Write-Host "No Internet connection. Make sure to connect to a network with Internet connction" -ForegroundColor Red
+        Start-Sleep 30
+    }
     
     # Initialize empty list
     $computers = @()
