@@ -489,7 +489,7 @@ If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Ad
 }
 
 # Check if the required modules are installed
-$modules =  'Microsoft.Graph.Authentication','Microsoft.Graph.Applications'
+$modules =  'Microsoft.Graph.Authentication','Microsoft.Graph.Applications','Microsoft.Graph.DeviceManagement'
 $installed = @((Get-Module $modules -ListAvailable).Name | Select-Object -Unique)
 $notInstalled = Compare-Object $modules $installed -PassThru
 # At least one module is missing. Install the missing modules now.
