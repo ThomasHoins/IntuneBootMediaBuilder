@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.0
+	Version:		1.3.1
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
