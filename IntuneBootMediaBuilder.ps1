@@ -36,6 +36,7 @@
 					"User.Read.All"
 	Changes: 		07.02.2025 added a scope check for the permissions	
 	Changes: 		07.02.2025 addecd Autopilot Profile Selection if no ID is provided
+ 	Changes: 		20.05.2025 bugfix for ADK download
 
 
 .LINK
@@ -534,6 +535,59 @@ $BootPath = "$WorkPath\mount\Boot"
 $InstWimPath = "$WorkPath\mount\InstWim"
 $PackageTemp = "$WorkPath\mount\PackageTemp"
 
+
+# Downloading ADK as we will need it for the components and oscdimg
+If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")) {
+	# === Variables ===
+	$adkUrl    = "https://go.microsoft.com/fwlink/?linkid=2243390"  # ADK Web Installer
+	$peUrl     = "https://go.microsoft.com/fwlink/?linkid=2243391"  # WinPE Add-on
+	$workingDir = "$env:TEMP\ADK_Install"
+	$adkExe    = "$workingDir\adksetup.exe"
+	$peExe     = "$workingDir\adkwinpesetup.exe"
+	$logDir    = "$workingDir\logs"
+	
+	# === Prepare Workdir ===
+	Write-Host "Erstelle Arbeitsverzeichnis..." -ForegroundColor Cyan
+	New-Item -ItemType Directory -Path $workingDir -Force | Out-Null
+	New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+	
+	# === Download ===
+	Write-Host "Downloading ADK..." -ForegroundColor Cyan
+	Invoke-WebRequest -Uri $adkUrl -OutFile $adkExe
+	
+	Write-Host "Downloading WinPE Add-on..." -ForegroundColor Cyan
+	Invoke-WebRequest -Uri $peUrl -OutFile $peExe
+	
+	# === Install ADK (just Deployment Tools) ===
+	Write-Host "Installing Windows ADK (Deployment Tools)..." -ForegroundColor Green
+	Start-Process -FilePath $adkExe -ArgumentList @(
+	    "/quiet",
+	    "/norestart",
+	    "/features", "OptionId.DeploymentTools",
+	    "/log", "$logDir\adk_install.log"
+	) -Wait
+	
+	# === Install WinPE Add-on  ===
+	Write-Host "Installing Windows PE Add-on..." -ForegroundColor Green
+	Start-Process -FilePath $peExe -ArgumentList @(
+	    "/quiet",
+	    "/norestart",
+	    "/log", "$logDir\winpe_install.log"
+	) -Wait
+	
+	# === Checking ===
+	Write-Host "`nChecking installed components..." -ForegroundColor Yellow
+	$installed = Get-WmiObject -Class Win32_Product | Where-Object {
+	    $_.Name -like "*Assessment*" -or $_.Name -like "*Preinstallation*"
+	}
+	$installed | Select-Object Name, Version
+	
+	Write-Host "`nReady! Windows ADK Deployment Tools and WinPE are installed now." -ForegroundColor Green
+	Write-Host "Logs can be found under: $logDir" -ForegroundColor Gray
+
+}
+
+
 # prepare PE data
 If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	$env:DandIRoot = "$ADKPath\Deployment Tools"
@@ -560,19 +614,6 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 	Write-Host "This USB stick is too small!"
 	Exit
 } 
-
-# Downloading ADK as we will need it for the components and oscdimg
-If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")) {
-	Write-Host "No ADK has been found, installing it!"
-	If ($ADKVersion){
-		winget install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
-		winget install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
-  	} 
-	Else{
-		winget install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
-		winget install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
-  	} 
-}
 
 
 # Create Wifi Profile (User can select a Profile)
