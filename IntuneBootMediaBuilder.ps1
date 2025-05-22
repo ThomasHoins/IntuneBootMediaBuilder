@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.1
+	Version:		1.3.2
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -36,7 +36,8 @@
 					"User.Read.All"
 	Changes: 		07.02.2025 added a scope check for the permissions	
 	Changes: 		07.02.2025 addecd Autopilot Profile Selection if no ID is provided
- 	Changes: 		20.05.2025 bugfix for ADK download
+	Changes: 		20.05.2025 bugfix for ADK download
+	Changes: 		22.05.2025 bugfix for USB Disk Format
 
 
 .LINK
@@ -490,7 +491,7 @@ If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Ad
 }
 
 # Check if the required modules are installed
-$modules =  'Microsoft.Graph.Authentication','Microsoft.Graph.Applications','Microsoft.Graph.DeviceManagement'
+$modules =  'Microsoft.Graph.Devices.CorporateManagement','Microsoft.Graph.DeviceManagement','Microsoft.Graph.Authentication','Microsoft.Graph.Applications'
 $installed = @((Get-Module $modules -ListAvailable).Name | Select-Object -Unique)
 $notInstalled = Compare-Object $modules $installed -PassThru
 # At least one module is missing. Install the missing modules now.
@@ -865,7 +866,9 @@ Switch ($MediaSelection) {
         Write-Host "Formatting $($usbDrive.FriendlyName)" -ForegroundColor Red
         Start-Sleep 5
 		$usbDriveNumber = $usbDrive.Number
-		Get-Partition $usbDriveNumber | Remove-Partition -Confirm:$false
+		Set-Disk -Number $usbDriveNumber -IsReadOnly $false
+		Clear-Disk -Number $usbDriveNumber -RemoveData -Confirm:$false
+		Initialize-Disk -Number $usbDriveNumber -PartitionStyle MBR
 		If ($MultiParitionUSB) {
 			#rework this part, all Setup stuff has to go to I: !
 			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
@@ -877,7 +880,7 @@ Switch ($MediaSelection) {
 			Copy-Item $InstWimTemp "I:\Source" -Force
 		}
 		Else {
-			If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 2199023255552) {
+			If ($usbDrive.Size -lt 2199023255552) {
 				New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			}
 			Else {
