@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.0
+	Version:		1.3.4
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -36,6 +36,10 @@
 					"User.Read.All"
 	Changes: 		07.02.2025 added a scope check for the permissions	
 	Changes: 		07.02.2025 addecd Autopilot Profile Selection if no ID is provided
+	Changes: 		10.02.2025 Changed the files to json and added a input for the Group Tag
+	Changes: 		20.02.2025 Minor changes in the script, added a check for the ADK installation
+	Changes: 		21.02.2025 Changed the Settings file to a JSON file
+	Changes: 		13.09.2025 More stable USB Disk creation, Group Tag selection, if permission is OK, New TenantDomain parmeter, to avoid "Organization.Read.All" right 
 
 
 .LINK
@@ -75,7 +79,7 @@ There is an excellent online generator for that file.
 
 .PARAMETER ADKPath
 Specifies the installation path of the Windows ADK. If the ADK is not installed, it will be downloaded and installed automatically.
-The ADK will only be used if an ISO file is created or if you select a custom install image with the `-DownloadISO` parameter.
+The ADK will be used for the add ons and if an ISO file is created or if you select a custom install image with the `-DownloadISO` parameter.
 
 .PARAMETER ADKVersion
 Specifies the version of the Windows ADK to be installed. The default is `10.1.22621.1`. This version should match the version of the installed operating system.
@@ -152,10 +156,13 @@ Param (
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
 	[string]$ADKVersion,	#  "10.1.22621.1"
+	[string]$SecretFile = "$PSScriptRoot\appreg-intune-BootMediaBuilder-Script-ReadWrite-Prod.json",
 	[string]$TenantID,
+	[string]$TenantDomain,
 	[string]$AppId,
 	[string]$AppSecret,
-	[string]$ProfileID		# "4ea72baa-ff3a-45c3-96d4-1aca14a72899" # "0b38e470-832e-427e-9f02-e28fb5387421"
+	[string]$ApplicationPermissions = "DeviceManagementServiceConfig.ReadWrite.All", 
+	[string]$ProfileID	
 )	
 
 ###########################################################
@@ -210,10 +217,17 @@ function Get-IntuneJson() {
 	}
 
 	# Set the org-related info
-	$script:TenantOrg = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/organization" -OutputType PSObject).value
-	foreach ($domain in $script:TenantOrg.VerifiedDomains) {
-		if ($domain.isDefault) {
-			$script:TenantDomain = $domain.name
+	If (!$script:TenantDomain){
+		$Context= Get-MgContext
+		if ($context.Account) {$script:TenantDomain = $context.Account.Split("@")[1]}
+		if (!$script:TenantDomain){
+			$ApplicationPermissions += ", Organization.Read.All"
+			$script:TenantOrg = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/organization" -OutputType PSObject).value
+			foreach ($domain in $script:TenantOrg.VerifiedDomains) {
+				if ($domain.isDefault) {
+					$script:TenantDomain = $domain.name
+				}
+			}
 		}
 	}
 	$oobeSettings = $approfile.outOfBoxExperienceSettings
@@ -297,7 +311,7 @@ function Connect-Intune{
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $false)]
-        [string]$SettingsFile = "$env:Temp\Settings.json",
+        [string]$SecretFile = "$env:Temp\Settings.json",
 		[Parameter(Mandatory = $false)]
         [string]$Scopes = "Application.ReadWrite.OwnedBy",
         [Parameter(Mandatory = $false)]
@@ -308,13 +322,12 @@ function Connect-Intune{
 		[string[]]$DelegationPermissions = ""
 
     )
-    If (Test-Path -Path $SettingsFile){
+    If (Test-Path -Path $SecretFile){
 		Write-Host "Reading Settings file..." -ForegroundColor Yellow
-		Get-Content -Path $SettingsFile | ConvertFrom-Json | ForEach-Object {
-			$TenantID = $_.TenantID
-			$AppID = $_.AppID
-			$AppSecret = $_.AppSecret
-		}
+		$SecretSettings = Get-Content -Path $SecretFile | ConvertFrom-Json
+		$TenantID = $SecretSettings.TenantID
+		$AppID = $SecretSettings.AppID
+		$AppSecret = $SecretSettings.AppSecret
 		Write-Host "Settings file read successfully." -ForegroundColor Green
 		Write-Host "Using App Secret to connect to Tenant: $TenantID" -ForegroundColor Green
 		$SecureClientSecret = ConvertTo-SecureString -String $AppSecret -AsPlainText -Force
@@ -348,7 +361,7 @@ function Connect-Intune{
 
 		$ErrorActionPreference = "Stop"
 		try {
-			$null = Get-MgDeviceAppManagement
+			$null = Get-MgDeviceManagement
 		}
 		catch {
 			Write-Host "==========================================" -ForegroundColor Red
@@ -390,6 +403,7 @@ function Connect-Intune{
 		# Define Application and Delegation Permission ids and type in a hash
 		$permissions = [ordered]@{}
 		If ($ApplicationPermissions){
+			$ApplicationPermissions += ",DeviceManagementRBAC.Read.All" #add optional Permission to read the Group Tags
 			$AppPermissions = $ApplicationPermissions.Split(",").Trim()
 			$PermID = ""
 			foreach($APermission in $AppPermissions){
@@ -451,17 +465,18 @@ function Connect-Intune{
 		}
 
 		#Update Settings file with gathered information
-		$Settings = [ordered]@{
-			_Comment1 = "Make sure to keep this secret safe. This secret can be used to connect to your tenant!"
-			_Comment2 = "The following permissions are granted with this secret"
-			_Comment3 = $AppPermissions,$DelPermissions
+		$SecretSettings = [ordered]@{
+			Comment1 = "Make sure to keep this secret safe. This secret can be used to connect to your tenant!"
+			Comment2 = "The following permissions are granted with this secret:"
+			ApplicationPermissions = $ApplicationPermissions
+			DelegationPermissions = $DelegationPermissions
 			AppName = $AppObj.DisplayName
 			CreatedBy = $TenantData.Account
 			TenantID = $TenantID
 			AppID = $AppID
 			AppSecret = $AppSecret
 		}
-		Out-File -FilePath $SettingsFile -InputObject ($Settings | ConvertTo-Json)
+		Out-File -FilePath $SecretFile -InputObject ($SecretSettings | ConvertTo-Json)
 
 		Write-Host ""
 		Write-Host "==========================================================" -ForegroundColor Red
@@ -481,6 +496,10 @@ function Connect-Intune{
 #	Main
 ###########################################################
 
+###########################################################
+#region	Preparations
+###########################################################
+
 $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
 If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator))) {
@@ -492,6 +511,7 @@ If (!($userPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Ad
 $modules =  'Microsoft.Graph.Authentication','Microsoft.Graph.Applications','Microsoft.Graph.DeviceManagement'
 $installed = @((Get-Module $modules -ListAvailable).Name | Select-Object -Unique)
 $notInstalled = Compare-Object $modules $installed -PassThru
+
 # At least one module is missing. Install the missing modules now.
 if ($notInstalled) { 
 	Write-Host "Installing required modules..." -ForegroundColor Yellow
@@ -546,10 +566,12 @@ If (!([string]::IsNullOrEmpty($DownloadISO)) -or ($MediaSelection -eq "I")) {
 	Remove-Item "$PEPath\media\Boot\bootfix.bin" -Force 
 }
 
-Connect-Intune -SettingsFile "$TempFolder\appreg-inune-BootMediaBuilder-Script-ReadWrite-Prod.json" -Scopes "Application.ReadWrite.All" -ApplicationPermissions "DeviceManagementServiceConfig.ReadWrite.All, Organization.Read.All"
+# Connect to Graph
+Connect-Intune -SecretFile $SecretFile -Scopes "Application.ReadWrite.All" -ApplicationPermissions $ApplicationPermissions
 
 $ProfileJSON = Get-IntuneJson -id $ProfileID
 $ProfileJSON | Set-Content -Encoding Ascii "$WorkPath\AutopilotConfigurationFile.json"
+
 #Ask for media type to build
 do {
 	$MediaSelection = Read-Host "Create an ISO image or a USB Stick or Cancel? [I,U]"
@@ -564,21 +586,53 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 # Downloading ADK as we will need it for the components and oscdimg
 If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")) {
 	Write-Host "No ADK has been found, installing it!"
+	$ErrorID= $false
 	If ($ADKVersion){
-		winget install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
-		winget install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+  		If($process.ExitCode -ne 0) {$ErrorID= $true} 
+    	$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+      	If($process.ExitCode -ne 0) {$ErrorID= $true} 
   	} 
 	Else{
-		winget install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
-		winget install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements | Out-Null
+  		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+  		If($process.ExitCode -ne 0) {$ErrorID= $true} 
+    	$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
+      	If($process.ExitCode -ne 0) {$ErrorID= $true} 
   	} 
+
+	If ($ErrorID) {
+		Write-Host "Failed to install the ADK. Exiting"
+		Write-Host "Please install the ADK manually and try again."
+		Exit 1	
+	}
 }
 
+#Set a Group Tag for the Device
+try {
+	$graphApiVersion = "beta"
+	$uri = "https://graph.microsoft.com/$graphApiVersion/deviceManagement/roleScopeTags"
+	$grouptags = (Invoke-MGGraphRequest -Uri $uri -Method Get -OutputType PSObject).value
+	Write-Host "Select the Autopilot Profile to use:"
+	$i = 0
+	ForEach($GroupTag in $grouptags) {
+		Write-Host "[$i] $($grouptag.displayName)"
+		$i++
+	}
+	[int]$selection = Read-Host "Select Profile Number"
+	$GroupTag = $grouptags[$selection]
+	Write-Host "Selected $($grouptag.displayName)"
+}
+catch {
+	$GroupTag = Read-Host "Enter a Group Tag for the Device (Default: "Default")" 
+	If([string]::IsNullOrEmpty($GroupTag)){
+		$GroupTag = "Default"
+	}
+}
 
 # Create Wifi Profile (User can select a Profile)
 If ($AutocreateWifiProfile) {
 	$list=((netsh.exe wlan show profiles) -match ' : ')
-	If($list.Count -ne 0) {
+	If($list) {
 		$ProfileNames = $list.Split(":").Trim()
 		If ($list.Count -gt 1) {
 			For( $i = 1; $i -lt $ProfileNames.Count; $i +=2) {
@@ -592,16 +646,16 @@ If ($AutocreateWifiProfile) {
 			$ProfileName = $ProfileNames[0] 
 		}
 		Write-Host "Exporting $ProfileName" -ForegroundColor Green
-
 	}
 	else {
 		Write-Host "No Wifi Profile found!" -ForegroundColor Yellow
 		$ProfileName = ""
 	}
 }
+#endregion
 
 ###########################################################
-#	Downloading Installation Media
+#region	Downloading Installation Media
 ###########################################################
 
 #Get FIDO and download Windows 11 installation ISO
@@ -667,9 +721,10 @@ Else {
 	Clear-Path
 	exit 1
 }
+#endregion
 
 ###########################################################
-#	Preparing Boot Image
+#region	Preparing Boot Image
 ###########################################################
 
 Write-Host "Preparing Boot Image"
@@ -732,9 +787,10 @@ $null = Add-Content -Path "$BootPath\Windows\System32\startnet.cmd" -Value $star
 
 # Unmount Boot Image
 $null = Dismount-WindowsImage -Path $BootPath -Save
+#endregion
 
 ###########################################################
-#	Prepareing Install Image
+#region	Prepareing Install Image
 ###########################################################
 
 Write-Host "Preparing Install Image"
@@ -764,7 +820,7 @@ Remove-Item $InstWimTemp -Force
 Rename-Item $InstWimDest $InstWimTemp
 
 #Add Installation Files to $InstMediaPath
-Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Settings.ps1" -Outfile "$InstMediaPath\Settings.ps1"
+#Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Settings.ps1" -Outfile "$InstMediaPath\Settings.ps1"
 Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/UploadAutopilotInfo.ps1" -Outfile "$InstMediaPath\UploadAutopilotInfo.ps1"
 
 # If a $AutounattendFile is supplied, use that, else download it
@@ -777,26 +833,43 @@ Else{
 
 #Add the Tenant & Wifi Settings to the Settings.ps1
 $ProfileFile=((netsh wlan export profile $ProfileName key=clear folder="$InstMediaPath\") -split """")[5]
-$Name = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
-$Settings = Get-Content "$TempFolder\Settings.json" | ConvertFrom-Json
-$content = Get-Content "$InstMediaPath\Settings.ps1"
-$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "Wifi =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$Wifi = ""$Name""") 
-$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "TenantId =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$TenantId  = ""$($Settings.TenantID)""") 
-$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppId =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$AppId  = ""$($Settings.AppId)""") 
-$line = Get-Content "$InstMediaPath\Settings.ps1" | Select-String "AppSecret =" | Select-Object -ExpandProperty Line
-$content = $content.Replace( $line, "[string]`$AppSecret  = ""$($Settings.AppSecret)""") 
-Set-Content "$InstMediaPath\Settings.ps1" -Value $content
+$WifiName = ($ProfileFile.Split("\")[-1]).Replace(".xml","")
 
+#Update Settings file with gathered information
+If (Test-Path -Path $SecretFile){
+	Write-Host "Reading Settings file..." -ForegroundColor Yellow
+	$SecretSettings = Get-Content -Path $SecretFile | ConvertFrom-Json
+	$TenantID = $SecretSettings.TenantID
+	$AppID = $SecretSettings.AppID
+	$AppSecret = $SecretSettings.AppSecret
+}
+
+$SettingsFile = "$InstMediaPath\Settings.json"
+$Settings = [ordered]@{
+	Wifi = $WifiName
+	GroupTag = $GroupTag
+	Comment1 = "[Assign] Wait for the Group Tag to be assigned before continuing"
+	Assign = $false
+	Comment2 = "[AssignedUser] Fill in the UPN of the user who will be assigned to the device"
+	AssignedUser = ""
+	Comment3 = "[OutputFile] If you want to output the hardware hash somewhere, put a path here"
+	OutputFile = ""
+	AppName = $AppObj.DisplayName
+	TenantID = $TenantID
+	AppID = $AppID
+	AppSecret = $AppSecret
+}
+Out-File -FilePath $SettingsFile -InputObject ($Settings | ConvertTo-Json)
+
+
+
+#endregion
 
 ###########################################################
-#	Creating Installation Media
+#region	Creating Installation Media
 ###########################################################
 
 #Create Media
-
 Switch ($MediaSelection) {
 	I {
 		#"$ADKPath\Deployment Tools\amd64\Oscdimg\oscdimg.exe" -bootdata:2#p0,e,b"$PEPath\fwfiles\etfsboot.com"#pEF,e,b"$PEPath\fwfiles\efisys.bin" -u1 -udfver102 "$InstMediaPath" "$IsoFileName"
@@ -844,8 +917,10 @@ Switch ($MediaSelection) {
 		Get-Partition $usbDriveNumber | Remove-Partition -Confirm:$false
 		If ($MultiParitionUSB) {
 			#rework this part, all Setup stuff has to go to I: !
-			New-Partition $usbDriveNumber -Size 2048MB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
-			New-Partition $usbDriveNumber -UseMaximumSize        -DriveLetter I | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" -Confirm:$false -Force
+			New-Partition $usbDriveNumber -Size 2048MB -IsActive | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
+			New-Partition $usbDriveNumber -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" -Confirm:$false -Force
+			Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -NewDriveLetter P
+			Set-Partition -DiskNumber $usbDriveNumber -Partition 2 -NewDriveLetter I
 			Write-Host "Copying boot data to disk"
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P: /max:3800000000" -Wait -NoNewWindow
 			New-Item -ItemType Directory -Path "I:\Source"
@@ -854,10 +929,12 @@ Switch ($MediaSelection) {
 		}
 		Else {
 			If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 2199023255552) {
-				New-Partition $usbDriveNumber -UseMaximumSize -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
-			}
+				New-Partition -DiskNumber $usbDriveNumber -UseMaximumSize -IsActive | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
+				Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -NewDriveLetter P
+				}
 			Else {
-				New-Partition $usbDriveNumber -Size 2TB -IsActive -DriveLetter P | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
+				New-Partition $usbDriveNumber -Size 2TB -IsActive | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
+				Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -NewDriveLetter P
 			}
 			$null = Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 			#Split the install.wim if greater 4GiB
@@ -874,3 +951,5 @@ $EndTime = Get-Date
 $time = $EndTime - $startTime
 Write-Host "It Took $($time.Hours)h:$($time.Minutes)m:$($time.Seconds)s to Build this Media" -ForegroundColor Magenta
 Write-Host "We are done!" -ForegroundColor Green
+
+#endregion
