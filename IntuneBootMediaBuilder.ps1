@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.4
+	Version:		1.3.5
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -40,6 +40,10 @@
 	Changes: 		20.02.2025 Minor changes in the script, added a check for the ADK installation
 	Changes: 		21.02.2025 Changed the Settings file to a JSON file
 	Changes: 		13.09.2025 More stable USB Disk creation, Group Tag selection, if permission is OK, New TenantDomain parmeter, to avoid "Organization.Read.All" right 
+	Changes: 		26.09.2025 Changed the detection of the permissions
+	Changes: 		26.09.2025 changed the format parameters for the USB creation
+	Changes: 		26.09.2025 Changed the way to install the ADK
+	Changes: 		26.09.2025 Added PE Driver Download for Dell and HP
 
 
 .LINK
@@ -152,6 +156,7 @@ Param (
 	[string]$OutputFolder,
 	[bool]$MultiParitionUSB = $false,
 	[string]$StartScriptSource = "https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
+	[string]$DriverVendors #= "Dell,HP,Lenovo, Microsoft",
 	[string]$DriverFolder = "C:\Temp\Drivers",
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
@@ -361,7 +366,7 @@ function Connect-Intune{
 
 		$ErrorActionPreference = "Stop"
 		try {
-			$null = Get-MgDeviceManagement
+			$null = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/deviceManagement"
 		}
 		catch {
 			Write-Host "==========================================" -ForegroundColor Red
@@ -535,14 +540,90 @@ If (([string]::IsNullOrEmpty($WorkPath))) {
 }	
 
 #Add minimal Drivers from Repository
-If (!(Test-Path -PathType Container $TempFolder\Drivers)) {
+If (!(Test-Path -PathType Container $DriverFolder)) {
 	$origProgressPreference = $ProgressPreference
 	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
 	Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Drivers.zip" -Outfile "$TempFolder\Drivers.zip"
 	$ProgressPreference = $origProgressPreference
 	Expand-Archive -LiteralPath "$TempFolder\Drivers.zip" -DestinationPath $TempFolder
 	Remove-Item "$TempFolder\Drivers.zip" -Force -ErrorAction SilentlyContinue
-}	
+}
+If ($DriverVendors) {
+	$DriverVendors.Split(",") | ForEach-Object {
+		$Vendor = $_.Trim()
+		Write-Host "Adding Drivers from Vendor $Vendor"
+		If (Test-Path -Path "$DriverFolder\$Vendor") {
+			Switch ($Vendor) {
+				"Dell" {
+					$finalTarget  = "$DriverFolder\$Vendor"
+					$extractTemp  = "$TempFolder\DellExtract"
+					New-Item -Path $finalTarget -ItemType Directory -Force | Out-Null
+					$origProgressPreference = $ProgressPreference
+					$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
+					Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/DellDrivers.zip.001" -Outfile "$TempFolder\DellDrivers.zip.001"
+					Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/DellDrivers.zip.002" -Outfile "$TempFolder\DellDrivers.zip.002"
+					$ProgressPreference = $origProgressPreference
+					$parts = Get-ChildItem $TempFolder -Filter "DellDrivers.zip*" | Sort-Object Name
+					Get-Content $parts.FullName -Encoding Byte -ReadCount 0 | Set-Content "$TempFolder\DellDrivers.zip" -Encoding Byte
+					Expand-Archive -LiteralPath "$TempFolder\DellDrivers.zip" -DestinationPath $extractTemp -Force
+					#all filees up one level
+					$child= (Get-ChildItem -Path $extractTemp -Directory | Select-Object -First 1).FullName
+					Get-ChildItem $child -Directory | % { Copy-Item $_.FullName -Destination "$finalTarget\$($_.Name)" -Recurse }
+					Remove-Item "$TempFolder\DellDrivers.zip.001" -Force -ErrorAction SilentlyContinue
+					Remove-Item "$TempFolder\DellDrivers.zip.002" -Force -ErrorAction SilentlyContinue
+					Remove-Item "$TempFolder\DellDrivers.zip" -Force -ErrorAction SilentlyContinue
+					Remove-Item $extractTemp -Recurse -Force -ErrorAction SilentlyContinue
+				}
+				"HP" { 
+					# Variables
+					$extractTemp  = "$TempFolder\HPExtract"
+					$finalTarget  = "$DriverFolder\$Vendor"
+
+					# Prepare directories
+					New-Item -Path $extractTemp -ItemType Directory -Force | Out-Null
+					New-Item -Path $finalTarget -ItemType Directory -Force | Out-Null
+
+					# Download the SoftPaq EXE
+					$origProgressPreference = $ProgressPreference
+					$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
+					Invoke-WebRequest -Uri "https://ftp.ext.hp.com/pub/softpaq/sp161501-162000/sp161830.exe" -OutFile "$TempFolder\sp161830.exe"
+					$ProgressPreference = $origProgressPreference
+					# Silent extraction to temporary folder
+					Start-Process -FilePath $downloadFile -ArgumentList "/s /e /f $extractTemp" -Wait
+
+					# Collect all driver files (INF, SYS, CAT, DLL, etc.)
+					$driverFiles = Get-ChildItem -Path $extractTemp -Recurse -Include *.inf,*.sys,*.cat,*.dll
+
+					foreach ($file in $driverFiles) {
+						# Get the parent directory name (model name)
+						$modelName = Split-Path $file.DirectoryName -Leaf
+
+						# Build destination path with model name
+						$destPath = Join-Path $finalTarget $modelName
+
+						# Ensure destination folder exists
+						if (-Not (Test-Path $destPath)) {
+							New-Item -Path $destPath -ItemType Directory -Force | Out-Null
+						}
+
+						# Copy the driver file into the model folder
+						Copy-Item $file.FullName -Destination $destPath -Force
+				}
+
+				Write-Host "Drivers have been extracted and copied into model folders under $finalTarget"
+				Remove-Item "$TempFolder\sp161830.exe" -Force -ErrorAction SilentlyContinue
+				Remove-Item $extractTemp -Recurse -Force -ErrorAction SilentlyContinue
+				}
+				"Lenovo" { Write-Host "Lenovo drivers are not yet supported" }
+				"Microsoft" { Write-Host "Microsoft drivers are not yet supported" }
+			}
+		}
+
+	}
+}
+Else {
+	Copy-Item -Path "$TempFolder\Drivers\*" -Destination $DriverFolder -Recurse -Force
+}
 
 If (([string]::IsNullOrEmpty($PEPath) )) {
 	$PEPath = "$WorkPath\WinPE_admd64"	
@@ -586,25 +667,38 @@ If ($usbDrive.Size -lt 7516192768 -and $MediaSelection -eq "U") {
 # Downloading ADK as we will need it for the components and oscdimg
 If (!(Test-Path -Path "$ADKPath\Windows Preinstallation Environment\copype.cmd")) {
 	Write-Host "No ADK has been found, installing it!"
-	$ErrorID= $false
+
 	If ($ADKVersion){
-		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-  		If($process.ExitCode -ne 0) {$ErrorID= $true} 
-    	$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --version $ADKVersion --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-      	If($process.ExitCode -ne 0) {$ErrorID= $true} 
+		Write-Host "Automatic download of a specific ADK version is not supported yet."
+		Write-Host "Please install the ADK manually and try again."
   	} 
 	Else{
-  		$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.WindowsADK --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-  		If($process.ExitCode -ne 0) {$ErrorID= $true} 
-    	$process = Start-Process -FilePath "winget.exe" -ArgumentList "install Microsoft.ADKPEAddon --disable-interactivity --nowarn --accept-source-agreements --accept-package-agreements" -Wait -PassThru
-      	If($process.ExitCode -ne 0) {$ErrorID= $true} 
-  	} 
+		# Download-URLs for ADK and WinPE Add-On
+		$adkUrl = "https://go.microsoft.com/fwlink/?linkid=2243390"
+		$winPEUrl = "https://go.microsoft.com/fwlink/?linkid=2243391"
 
-	If ($ErrorID) {
-		Write-Host "Failed to install the ADK. Exiting"
-		Write-Host "Please install the ADK manually and try again."
-		Exit 1	
-	}
+		# Destination folder for the installation files
+		$downloadFolder = "$env:TEMP\ADK_Install"
+		New-Item -ItemType Directory -Force -Path $downloadFolder
+
+		# Download of the installation files
+		Write-Host "Downloading ADK Setup..."
+		Invoke-WebRequest -Uri $adkUrl -OutFile "$downloadFolder\adksetup.exe"
+		Write-Host "Downloading WinPE Add-On Setup..."
+		Invoke-WebRequest -Uri $winPEUrl -OutFile "$downloadFolder\winpesetup.exe"
+
+		# Installation durchführen
+		try {
+			Start-Process -FilePath "$downloadFolder\adksetup.exe" -ArgumentList "/quiet /features OptionId.DeploymentTools" -Wait -PassThru
+			Start-Process -FilePath "$downloadFolder\winpesetup.exe" -ArgumentList "/quiet" -Wait -PassThru
+			Write-Host "Installation abgeschlossen!"
+		} catch {
+			Write-Host "Fehler bei der Installation: $($_.Exception.Message)" -ForegroundColor Red
+			Write-Host "Please install the ADK manually and try again."
+			Exit 1
+		}
+
+  	} 
 }
 
 #Set a Group Tag for the Device
@@ -917,10 +1011,11 @@ Switch ($MediaSelection) {
 		Get-Partition $usbDriveNumber | Remove-Partition -Confirm:$false
 		If ($MultiParitionUSB) {
 			#rework this part, all Setup stuff has to go to I: !
-			New-Partition $usbDriveNumber -Size 2048MB -IsActive | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
+			New-Partition $usbDriveNumber -Size 2048MB | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 			New-Partition $usbDriveNumber -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel "Images" -Confirm:$false -Force
 			Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -NewDriveLetter P
 			Set-Partition -DiskNumber $usbDriveNumber -Partition 2 -NewDriveLetter I
+			Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -IsActive $true
 			Write-Host "Copying boot data to disk"
 			Start-Process "$($env:windir)\System32\Robocopy.exe"  "/NP /s /z ""$InstMediaPath"" P: /max:3800000000" -Wait -NoNewWindow
 			New-Item -ItemType Directory -Path "I:\Source"
@@ -929,12 +1024,14 @@ Switch ($MediaSelection) {
 		}
 		Else {
 			If ((get-disk | Where-Object bustype -eq 'usb').Size -lt 2199023255552) {
-				New-Partition -DiskNumber $usbDriveNumber -UseMaximumSize -IsActive | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
+				New-Partition -DiskNumber $usbDriveNumber -UseMaximumSize | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 				Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -NewDriveLetter P
+				Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -IsActive $true
 				}
 			Else {
-				New-Partition $usbDriveNumber -Size 2TB -IsActive | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
+				New-Partition $usbDriveNumber -Size 2TB | Format-Volume -FileSystem FAT32 -NewFileSystemLabel "WinPE" -Confirm:$false -Force
 				Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -NewDriveLetter P
+				Set-Partition -DiskNumber $usbDriveNumber -Partition 1 -IsActive $true
 			}
 			$null = Set-ItemProperty -Path $InstWimTemp -Name IsReadOnly -Value $false
 			#Split the install.wim if greater 4GiB
