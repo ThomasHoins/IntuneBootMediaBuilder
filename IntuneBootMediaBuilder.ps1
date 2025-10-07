@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.5
+	Version:		1.3.6
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -44,6 +44,7 @@
 	Changes: 		26.09.2025 changed the format parameters for the USB creation
 	Changes: 		26.09.2025 Changed the way to install the ADK
 	Changes: 		26.09.2025 Added PE Driver Download for Dell and HP
+	Changes: 		07.10.2025 Added Driver and Language selection for the ISO download
 
 
 .LINK
@@ -147,8 +148,8 @@ Param (
 	[string]$PEPath,
 	[string]$IsoPath,
 	[string]$DownloadISO, #="https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=23e54b6a-020f-4f2b-ae70-e1e52676ea1c&P1=1734172137&P2=601&P3=2&P4=QToZDn6aVi4krTph%2fkSVvhS9RPAacWYuSb54K3mwuNrDZ6Vkh%2bil6BjCeoqf9bvAXns96krwYEbFjFiqocRaYNiGewxgN0YWFUKIttmo%2fVNNRKoXBlnlIy0omYT1ljweXzYUU17cJXEq3vtVHKT45mxVqbgainFJEDr%2brpEjK32FsfBIPG9FTvrl8dESy%2bhZ1KFyw7N0FXCXt1CaLipsfvkV49fr4a0EYnnVsIzDPIB1Cxpv9rSeOVtYchsPpWufYuq88cGH0tuyJWrK5IrHvDGbjnwBuQtX9WQ7dYPwdIwU7WYoH4SYh3%2fGnDbMfnGQMY4j7ap0qpE%2bIT4cuMriBA%3d%3d",
-	[string]$InstallLanguage = "English", 
-	[string]$Locale = "en-US", #en-US, de-DE, fr-FR, es-ES, it-IT, ja-JP, ko-KR, zh-CN, Override the default Locale
+	[string]$InstallLanguage = "English", #Brazil, Czech, Danish, Dutch, English, Estonian, Finnish, French, French Canadian, German, Greek, anHebrew, Hungarian, Italian, Japanese, Korean, Latvian, Lithuanian, Norwegian, Polish, Portuguese, Romanian, Russian, Serbian Latin, Slovak, Sloveni, Spanish, Swedish, Thai, Turkish, Ukrainian
+	#[string]$Locale = "en-US", #en-US, de-DE, fr-FR, es-ES, it-IT, ja-JP, ko-KR, zh-CN, Override the default Locale
 	[string]$WindowsEdition = "Windows 11 Home/Pro/Edu", #Download Edition	
 	[string]$WindowsVersion = "Windows 11 Pro",	
 	[string]$AutocreateWifiProfile = $true,
@@ -156,7 +157,7 @@ Param (
 	[string]$OutputFolder,
 	[bool]$MultiParitionUSB = $false,
 	[string]$StartScriptSource = "https://raw.githubusercontent.com/ThomasHoins/IntuneInstall/refs/heads/main/Start.ps1",
-	[string]$DriverVendors #= "Dell,HP,Lenovo, Microsoft",
+	[string]$DriverVendors, #= "Dell,HP,Lenovo, Microsoft",
 	[string]$DriverFolder = "C:\Temp\Drivers",
 	[string]$AutounattendFile,
 	[string]$ADKPath = "C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit",
@@ -504,6 +505,8 @@ function Connect-Intune{
 ###########################################################
 #region	Preparations
 ###########################################################
+$IsoLanguages = @("Arabic","Brazilian Portuguese","Bulgarian","Chinese (Simplified)","Chinese (Traditional)","Croatian","Czech","Danish","Dutch","English","English International","Estonian","Finnish","French","French Canadian","German","Greek","Hebrew","Hungarian","Italian","Japanese","Korean","Latvian","Lithuanian","Norwegian","Polish","Portuguese","Romanian","Russian","Serbian Latin","Slovak","Slovenian","Spanish","Spanish (Mexico)","Swedish","Thai","Turkish","Ukrainian","Vietnamese")
+$DriverVendorsList = @("Dell","HP","Lenovo","Microsoft")
 
 $startTime = Get-Date
 $userPrincipal = (New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent()))
@@ -548,6 +551,21 @@ If (!(Test-Path -PathType Container $DriverFolder)) {
 	Expand-Archive -LiteralPath "$TempFolder\Drivers.zip" -DestinationPath $TempFolder
 	Remove-Item "$TempFolder\Drivers.zip" -Force -ErrorAction SilentlyContinue
 }
+#Select Driver Vendors to include
+If (!$DriverVendors){
+	Write-Host "Select a driver vendor to include:"
+	$i = 0
+	ForEach($Vendor in $DriverVendorsList) {
+			Write-Host "[$i] $Vendor"
+			$i++
+	}
+	do {
+		[int]$selection = Read-Host "Select Profile Number (enter to finish)"
+		$DriverVendors += "$Vendor[$selection],"
+	} while ($selection -ne "")
+	Write-Host "Selected $DriverVendors"
+}
+
 If ($DriverVendors) {
 	$DriverVendors.Split(",") | ForEach-Object {
 		$Vendor = $_.Trim()
@@ -754,6 +772,19 @@ If ($AutocreateWifiProfile) {
 
 #Get FIDO and download Windows 11 installation ISO
 If ([string]::IsNullOrEmpty($DownloadISO) ) {
+	#Select a language
+	If (!$InstallLanguage){
+		Write-Host "Select the ISO language to use:"
+		$i = 0
+		ForEach($Language in $IsoLanguages) {
+			Write-Host "[$i] $($Language)"
+			$i++
+		}
+		[int]$selection = Read-Host "Select Language Number"
+		$InstallLanguage = $Language[$selection]
+		Write-Host "Selected $($InstallLanguage)"
+	}
+
 	Invoke-Webrequest "https://raw.githubusercontent.com/pbatard/Fido/refs/heads/master/Fido.ps1" -Outfile "$WorkPath\Fido.ps1"
 	#you can only use the script 3 times and then you have to wait 24h, restrictions of the MS web page.
 	if (Test-Path -PathType Leaf "$WorkPath\DownloadIso.txt") {
