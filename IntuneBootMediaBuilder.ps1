@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.6
+	Version:		1.3.7
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -45,6 +45,7 @@
 	Changes: 		26.09.2025 Changed the way to install the ADK
 	Changes: 		26.09.2025 Added PE Driver Download for Dell and HP
 	Changes: 		07.10.2025 Added Driver and Language selection for the ISO download
+	Changes: 		07.10.2025 Added Lenovo Driver Download, changed the download for MS Surface Drivers
 
 
 .LINK
@@ -542,14 +543,9 @@ If (([string]::IsNullOrEmpty($WorkPath))) {
  	Write-Host "Created an new work folder $WorkPath"
 }	
 
-#Add minimal Drivers from Repository
+#Adding minimal Drivers from Repository
 If (!(Test-Path -PathType Container $DriverFolder)) {
-	$origProgressPreference = $ProgressPreference
-	$ProgressPreference = 'SilentlyContinue' #to spped up the download significant
-	Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Drivers.zip" -Outfile "$TempFolder\Drivers.zip"
-	$ProgressPreference = $origProgressPreference
-	Expand-Archive -LiteralPath "$TempFolder\Drivers.zip" -DestinationPath $TempFolder
-	Remove-Item "$TempFolder\Drivers.zip" -Force -ErrorAction SilentlyContinue
+	$null = New-Item -ItemType Directory -Path $DriverFolder
 }
 #Select Driver Vendors to include
 If (!$DriverVendors){
@@ -632,8 +628,109 @@ If ($DriverVendors) {
 				Remove-Item "$TempFolder\sp161830.exe" -Force -ErrorAction SilentlyContinue
 				Remove-Item $extractTemp -Recurse -Force -ErrorAction SilentlyContinue
 				}
-				"Lenovo" { Write-Host "Lenovo drivers are not yet supported" }
-				"Microsoft" { Write-Host "Microsoft drivers are not yet supported" }
+				"Lenovo" {
+					$CatalogUrl  = "https://download.lenovo.com/cdrt/td/catalogv2.xml"
+					$DownloadDir = "$DriverFolder\$Vendor"
+					$extractTemp  = "$TempFolder\HPExtract"
+
+					$ProgressPreferenceDefault = $ProgressPreference
+					$ProgressPreference = 'SilentlyContinue'
+
+					if (-not (Test-Path $DownloadDir)) {
+						New-Item -Path $DownloadDir -ItemType Directory | Out-Null
+					}
+
+					Write-Host "Downloading Lenovo driver catalog..."
+
+					try {
+						# Download as byte array (raw binary)
+						$bytes = Invoke-WebRequest -Uri $CatalogUrl -UseBasicParsing -TimeoutSec 60
+						$raw = $bytes.Content
+
+						# Convert bytes → string (UTF8)
+						$rawText = [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::UTF8.GetBytes($raw))
+
+						# Remove possible UTF-8 BOM (ï»¿) or stray invisible chars
+						$cleanXml = $rawText -replace "^\xEF\xBB\xBF", "" -replace "^\uFEFF", "" -replace "ï»¿", ""
+
+						# Parse into XML
+						[xml]$xml = $cleanXml
+					}
+					catch {
+						Write-Error "Failed to download or parse catalog: $_"
+						return
+					}
+
+					Write-Host "Parsing catalog..."
+
+					$products = @()
+
+					foreach ($model in $xml.ModelList.Model) {
+						$name = $model.name
+						$types = $model.Types.Type
+						
+						foreach ($pack in $model.SCCM) {
+							$os = $pack.os
+							If ($os -eq "Win11"){
+							$driverUrl = $pack.'#text'
+						
+								$products += [PSCustomObject]@{
+									Name  = $name
+									Types = $types
+									OS    = $os
+									DriverURL   = $driverUrl
+									FileName = ($driverUrl -split '/' | Select-Object -Last 1)
+								}
+							}
+						}
+					}
+
+
+					if ($products.Count -eq 0) {
+						Write-Warning "No laptop models found in catalog."
+						exit
+					}
+
+					try {
+						$choice = $products | Sort-Object Name | Out-GridView -Title "Select Lenovo Laptop Model" -PassThru
+					}
+					catch {
+						Write-Host "Out-GridView not available, showing first 10..."
+						$choice = $products | Sort-Object Name | Select-Object -First 10
+						$choice | Format-Table -AutoSize
+						exit
+					}
+
+					if (-not $choice) {
+						Write-Host "No model selected. Exiting."
+						exit
+					}
+
+					$destFile = "$extractTemp\$($choice.FileName)"
+					$extractPath = Join-Path $DownloadDir ($choice.Name -replace '[^a-zA-Z0-9]', '_')
+					try{
+						Write-Host "Downloading driver pack for $($choice.Name)..."
+						Invoke-WebRequest -Uri $choice.DriverURL -OutFile $destFile -UseBasicParsing
+
+						Write-Host "Extracting to $extractPath ..."
+						Start-Process -FilePath $destFile -ArgumentList "/VERYSILENT /DIR=$($extractPath)" -Wait
+						Remove-Item $destFile -Force -ErrorAction SilentlyContinue
+						Write-Host "Done. Drivers extracted to: $extractPath"
+						}
+					catch {
+						Write-Error "Failed to download driver pack: $($choice.Name) - $_"
+					}
+				$ProgressPreference = $ProgressPreferenceDefault
+				}
+				"Microsoft" { 
+					Write-Host "Downloading Minimal Surface driver pack."
+					$ProgressPreferenceDefault = $ProgressPreference
+					$ProgressPreference = 'SilentlyContinue' #to speed up the download significant
+					Invoke-Webrequest "https://raw.githubusercontent.com/ThomasHoins/IntuneBootMediaBuilder/refs/heads/main/Drivers.zip" -Outfile "$TempFolder\Drivers.zip"
+					$ProgressPreference = $ProgressPreferenceDefault
+					Expand-Archive -LiteralPath "$TempFolder\Drivers.zip" -DestinationPath $TempFolder
+					Remove-Item "$TempFolder\Drivers.zip" -Force -ErrorAction SilentlyContinue
+				}
 			}
 		}
 
