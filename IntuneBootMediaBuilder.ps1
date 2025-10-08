@@ -16,7 +16,7 @@
 
 .NOTES
 
-	Version:		1.3.7
+	Version:		1.3.8
 	Author: 		Thomas Hoins 
 				Datagroup OIT
  	initial Date:		10.12.2024
@@ -46,6 +46,7 @@
 	Changes: 		26.09.2025 Added PE Driver Download for Dell and HP
 	Changes: 		07.10.2025 Added Driver and Language selection for the ISO download
 	Changes: 		07.10.2025 Added Lenovo Driver Download, changed the download for MS Surface Drivers
+	Changes: 		08.10.2025 Bug Fixing
 
 
 .LINK
@@ -631,7 +632,7 @@ If ($DriverVendors) {
 				"Lenovo" {
 					$CatalogUrl  = "https://download.lenovo.com/cdrt/td/catalogv2.xml"
 					$DownloadDir = "$DriverFolder\$Vendor"
-					$extractTemp  = "$TempFolder\HPExtract"
+
 
 					$ProgressPreferenceDefault = $ProgressPreference
 					$ProgressPreference = 'SilentlyContinue'
@@ -671,13 +672,14 @@ If ($DriverVendors) {
 						
 						foreach ($pack in $model.SCCM) {
 							$os = $pack.os
+							$date = $pack.date
 							If ($os -eq "Win11"){
-							$driverUrl = $pack.'#text'
-						
+								$driverUrl = $pack.'#text'
 								$products += [PSCustomObject]@{
 									Name  = $name
 									Types = $types
 									OS    = $os
+									Date  = $date
 									DriverURL   = $driverUrl
 									FileName = ($driverUrl -split '/' | Select-Object -Last 1)
 								}
@@ -698,24 +700,43 @@ If ($DriverVendors) {
 						Write-Host "Out-GridView not available, showing first 10..."
 						$choice = $products | Sort-Object Name | Select-Object -First 10
 						$choice | Format-Table -AutoSize
-						exit
+						return
 					}
 
 					if (-not $choice) {
 						Write-Host "No model selected. Exiting."
-						exit
+						return
 					}
 
-					$destFile = "$extractTemp\$($choice.FileName)"
-					$extractPath = Join-Path $DownloadDir ($choice.Name -replace '[^a-zA-Z0-9]', '_')
 					try{
-						Write-Host "Downloading driver pack for $($choice.Name)..."
-						Invoke-WebRequest -Uri $choice.DriverURL -OutFile $destFile -UseBasicParsing
-
-						Write-Host "Extracting to $extractPath ..."
-						Start-Process -FilePath $destFile -ArgumentList "/VERYSILENT /DIR=$($extractPath)" -Wait
-						Remove-Item $destFile -Force -ErrorAction SilentlyContinue
-						Write-Host "Done. Drivers extracted to: $extractPath"
+						$jobs = @()
+						$maxParallel = 3
+						foreach($Item in $choice) {
+							$jobs += Start-Job -Name $Item.Name-ScriptBlock {
+								param($Item, $DownloadDir)
+								$destFile = Join-Path $DownloadDir $Item.FileName
+								$extractPath = Join-Path $DownloadDir ($Item.Name -replace '[^a-zA-Z0-9]', '_')
+								
+								Write-Output "Downloading driver pack for $($Item.Name)..."
+								$ProgressPreference = 'SilentlyContinue'
+								Invoke-WebRequest -Uri $Item.DriverURL -OutFile $destFile -UseBasicParsing
+								
+								Write-Output "Extracting to $extractPath ..."
+								Start-Process -FilePath $destFile -ArgumentList "/VERYSILENT /DIR=$($extractPath)" -Wait
+								Write-Output "Drivers extracted to: $extractPath"
+								} -ArgumentList $Item, $DownloadDir
+							$running = (Get-Job -State Running)
+							foreach ($job in $running) {
+								Receive-Job -Job $job -Keep| Write-Output 
+								}
+							while ((Get-Job -State Running).Count -ge $maxParallel) {
+								Write-Output "Waiting for a job to complete... "
+								Start-Sleep -Seconds 30
+								}
+							}
+						Wait-Job $jobs
+						Receive-Job $jobs
+						Remove-Job $jobs
 						}
 					catch {
 						Write-Error "Failed to download driver pack: $($choice.Name) - $_"

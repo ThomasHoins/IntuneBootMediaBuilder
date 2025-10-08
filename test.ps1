@@ -38,13 +38,14 @@ foreach ($model in $xml.ModelList.Model) {
     
     foreach ($pack in $model.SCCM) {
         $os = $pack.os
+        $date = $pack.date
         If ($os -eq "Win11"){
-        $driverUrl = $pack.'#text'
-    
+            $driverUrl = $pack.'#text'
             $products += [PSCustomObject]@{
                 Name  = $name
                 Types = $types
                 OS    = $os
+                Date  = $date
                 DriverURL   = $driverUrl
                 FileName = ($driverUrl -split '/' | Select-Object -Last 1)
             }
@@ -73,15 +74,35 @@ if (-not $choice) {
     exit
 }
 
-$destFile = "$DownloadDir\$($choice.FileName)"
-$extractPath = Join-Path $DownloadDir ($choice.Name -replace '[^a-zA-Z0-9]', '_')
 try{
-    Write-Host "Downloading driver pack for $($choice.Name)..."
-    Invoke-WebRequest -Uri $choice.DriverURL -OutFile $destFile -UseBasicParsing
-
-    Write-Host "Extracting to $extractPath ..."
-    Start-Process -FilePath $destFile -ArgumentList "/VERYSILENT /DIR=$($extractPath)" -Wait
-    Write-Host "Done. Drivers extracted to: $extractPath"
+    $jobs = @()
+    $maxParallel = 3
+    foreach($Item in $choice) {
+        $jobs += Start-Job -Name $Item.Name-ScriptBlock {
+            param($Item, $DownloadDir)
+            $destFile = Join-Path $DownloadDir $Item.FileName
+            $extractPath = Join-Path $DownloadDir ($Item.Name -replace '[^a-zA-Z0-9]', '_')
+            
+            Write-Output "Downloading driver pack for $($Item.Name)..."
+            $ProgressPreference = 'SilentlyContinue'
+            Invoke-WebRequest -Uri $Item.DriverURL -OutFile $destFile -UseBasicParsing
+            
+            Write-Output "Extracting to $extractPath ..."
+            #Start-Process -FilePath $destFile -ArgumentList "/VERYSILENT /DIR=$($extractPath)" -Wait
+            Write-Output "Drivers extracted to: $extractPath"
+            } -ArgumentList $Item, $DownloadDir
+        $running = (Get-Job -State Running)
+        foreach ($job in $running) {
+            Receive-Job -Job $job -Keep| Write-Output 
+            }
+        while ((Get-Job -State Running).Count -ge $maxParallel) {
+            Write-Output "Waiting for a job to complete... "
+            Start-Sleep -Seconds 30
+            }
+        }
+    Wait-Job $jobs
+    Receive-Job $jobs
+    Remove-Job $jobs
     }
 catch {
     Write-Error "Failed to download driver pack: $($choice.Name) - $_"
