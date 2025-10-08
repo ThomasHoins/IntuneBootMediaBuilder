@@ -34,23 +34,31 @@ $products = @()
 
 foreach ($model in $xml.ModelList.Model) {
     $name = $model.name
+    #if ($name -notmatch "ThinkPad|IdeaPad|Yoga|Legion|Notebook|Laptop") {continue}
+    # Laptop Option
     $types = $model.Types.Type
     
-    foreach ($pack in $model.SCCM) {
+    foreach ($pack in $model.SCCM){
         $os = $pack.os
-        $date = $pack.date
         If ($os -eq "Win11"){
+            $date = $pack.date
+            $version = $pack.version
             $driverUrl = $pack.'#text'
-            $products += [PSCustomObject]@{
-                Name  = $name
-                Types = $types
-                OS    = $os
-                Date  = $date
-                DriverURL   = $driverUrl
-                FileName = ($driverUrl -split '/' | Select-Object -Last 1)
+            $filename = ($driverUrl -split '/' | Select-Object -Last 1)
+            if (-not ($products | Where-Object { $_.FileName -eq $filename})) {
+                $products += [PSCustomObject]@{
+                    Name  = $name
+                    Types = $types
+                    OS    = $os
+                    Version = $version
+                    Date  = $date
+                    DriverURL   = $driverUrl
+                    FileName = $filename
+                }
             }
         }
     }
+
 }
 
 
